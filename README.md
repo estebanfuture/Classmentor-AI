@@ -65,11 +65,33 @@ copy .env.example .env
 Edita `backend/.env` y configura:
 
 ```text
+TRANSCRIPTION_PROVIDER=openai
 OPENAI_API_KEY=tu_clave_de_openai
 OPENAI_TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe
+WHISPER_MODEL=base
 ```
 
 El archivo `.env` no debe subirse a GitHub. Ya esta incluido en `.gitignore`.
+
+Puedes elegir el proveedor de transcripcion con `TRANSCRIPTION_PROVIDER`:
+
+```text
+TRANSCRIPTION_PROVIDER=openai
+```
+
+usa OpenAI y requiere `OPENAI_API_KEY`.
+
+```text
+TRANSCRIPTION_PROVIDER=local_whisper
+```
+
+usa `faster-whisper` localmente en CPU. En este modo no necesitas cuota de OpenAI para transcribir, pero la primera ejecucion puede tardar porque descarga el modelo indicado por:
+
+```text
+WHISPER_MODEL=base
+```
+
+Puedes cambiar `WHISPER_MODEL` por otro modelo compatible con faster-whisper mas adelante, pero `base` es el valor inicial recomendado para desarrollo.
 
 ## Probar el endpoint de salud
 
@@ -295,7 +317,16 @@ Cuando `GET /classes/{class_id}` muestre `audio_path` con una ruta valida, ejecu
 POST /classes/{class_id}/transcribe
 ```
 
-Si falta `OPENAI_API_KEY`, el backend devolvera un error claro sin romper `/health` ni el arranque del servidor.
+Si `TRANSCRIPTION_PROVIDER=openai` y falta `OPENAI_API_KEY`, el backend devolvera un error claro sin romper `/health` ni el arranque del servidor.
+
+Si quieres probar la transcripcion local, cambia en `backend/.env`:
+
+```text
+TRANSCRIPTION_PROVIDER=local_whisper
+WHISPER_MODEL=base
+```
+
+La primera vez, `faster-whisper` descargara el modelo y puede tardar unos minutos.
 
 Si la clave existe y el audio es valido, se generara:
 
