@@ -24,18 +24,27 @@ def upload_class_video(file: UploadFile = File(...)) -> dict[str, str]:
             detail="Solo se aceptan archivos de video con extension .mp4.",
         )
 
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-    # uuid4 evita conflictos si dos usuarios suben archivos con el mismo nombre.
-    saved_filename = f"{uuid4()}.mp4"
+    # Este id sera la referencia estable de la clase en las siguientes fases.
+    class_id = str(uuid4())
+    saved_filename = f"{class_id}.mp4"
     saved_path = UPLOAD_DIR / saved_filename
+    saved_path_response = (Path("backend") / "uploads" / saved_filename).as_posix()
 
-    with saved_path.open("wb") as output_file:
-        copyfileobj(file.file, output_file)
+    try:
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+        with saved_path.open("wb") as output_file:
+            copyfileobj(file.file, output_file)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo guardar el archivo subido.",
+        ) from exc
 
     return {
-        "status": "uploaded",
+        "class_id": class_id,
         "original_filename": original_filename,
         "saved_filename": saved_filename,
-        "saved_path": str(saved_path),
+        "saved_path": saved_path_response,
+        "message": "Video uploaded successfully",
     }

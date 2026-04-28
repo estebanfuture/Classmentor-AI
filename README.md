@@ -58,10 +58,11 @@ Si el archivo es valido, recibiras una respuesta parecida a esta:
 
 ```json
 {
-  "status": "uploaded",
+  "class_id": "0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a",
   "original_filename": "mi-clase.mp4",
   "saved_filename": "0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a.mp4",
-  "saved_path": "C:\\ruta\\del\\proyecto\\backend\\uploads\\0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a.mp4"
+  "saved_path": "backend/uploads/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a.mp4",
+  "message": "Video uploaded successfully"
 }
 ```
 
@@ -71,4 +72,4 @@ El archivo quedara guardado dentro de:
 backend/uploads/
 ```
 
-Si subes un archivo que no termina en `.mp4`, el backend devolvera un error HTTP 400 con un mensaje claro.
+Si subes un archivo que no termina en `.mp4`, el backend devolvera un error HTTP 400 con un mensaje claro. Si ocurre un problema al guardar el archivo, devolvera HTTP 500.
