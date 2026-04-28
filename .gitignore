@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Environment variables
+.env
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Storage files
+storage/uploads/*
+storage/audio/*
+storage/frames/*
+storage/outputs/*
+
+# Keep folders
+!storage/uploads/.gitkeep
+!storage/audio/.gitkeep
+!storage/frames/.gitkeep
+!storage/outputs/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
