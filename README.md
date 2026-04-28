@@ -16,6 +16,18 @@ El backend quedara disponible en:
 http://127.0.0.1:8000
 ```
 
+## Requisito para extraer audio
+
+Para usar la extraccion de audio, FFmpeg debe estar instalado en Windows y disponible en el `PATH`.
+
+Puedes comprobarlo desde una terminal con:
+
+```powershell
+ffmpeg -version
+```
+
+Si el comando muestra informacion de version, FastAPI podra usar FFmpeg desde el endpoint de extraccion.
+
 ## Base de datos SQLite
 
 ClassMentor AI usa SQLAlchemy para guardar un registro basico de cada clase subida.
@@ -138,3 +150,52 @@ GET /classes/{class_id}
 Pega ese identificador y pulsa `Execute`.
 
 Si existe, veras los detalles de esa clase. Si no existe, el backend devolvera HTTP 404 con un mensaje claro.
+
+## Probar la extraccion de audio
+
+Primero sube un MP4 con:
+
+```text
+POST /classes/upload
+```
+
+Antes de extraer audio, el detalle de la clase tendra:
+
+```json
+{
+  "audio_path": null,
+  "status": "uploaded"
+}
+```
+
+Despues, copia el `class_id` y ejecuta en Swagger:
+
+```text
+POST /classes/{class_id}/extract-audio
+```
+
+Si todo va bien, FFmpeg generara un archivo WAV en:
+
+```text
+backend/audio/{class_id}.wav
+```
+
+La respuesta sera parecida a esta:
+
+```json
+{
+  "class_id": "0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a",
+  "video_path": "backend/uploads/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a.mp4",
+  "audio_path": "backend/audio/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a.wav",
+  "status": "audio_extracted",
+  "message": "Audio extracted successfully"
+}
+```
+
+Si vuelves a ejecutar:
+
+```text
+GET /classes/{class_id}
+```
+
+veras `audio_path` con la ruta del WAV y `status` como `audio_extracted`.
