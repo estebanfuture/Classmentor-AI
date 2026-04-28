@@ -1,23 +1,37 @@
 # Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 .venv/
+venv/
 
 # Environment variables
 .env
 
-# Database
+# SQLite databases
 *.db
 *.sqlite
 *.sqlite3
 
-# Storage files
+# Backend generated files
+backend/uploads/*
+backend/outputs/*
+backend/frames/*
+backend/audio/*
+
+# Keep empty folders
+!backend/uploads/.gitkeep
+!backend/outputs/.gitkeep
+!backend/frames/.gitkeep
+!backend/audio/.gitkeep
+
+# Old storage folder if it exists
 storage/uploads/*
 storage/audio/*
 storage/frames/*
 storage/outputs/*
 
-# Keep folders
 !storage/uploads/.gitkeep
 !storage/audio/.gitkeep
 !storage/frames/.gitkeep
