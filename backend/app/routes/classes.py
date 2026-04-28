@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from shutil import copyfileobj
 from uuid import uuid4
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.database.db import get_db
 from app.database.models import ClassRecording
 from app.services.audio_service import extract_audio
+from app.services.transcription_service import transcribe_audio
 from app.services.video_service import extract_frames
 
 
@@ -19,6 +21,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 UPLOAD_DIR = BACKEND_DIR / "uploads"
 AUDIO_DIR_RESPONSE = Path("backend") / "audio"
 FRAMES_DIR_RESPONSE = Path("backend") / "frames"
+OUTPUTS_DIR_RESPONSE = Path("backend") / "outputs"
 
 
 def class_recording_to_dict(class_recording: ClassRecording) -> dict[str, str | None]:
@@ -214,4 +217,74 @@ def extract_class_frames(
         "frame_paths": frame_paths,
         "status": class_recording.status,
         "message": "Frames extracted successfully",
+    }
+
+
+@router.post("/{class_id}/transcribe")
+def transcribe_class_audio(
+    class_id: str,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    """Transcribe el audio extraido de una clase."""
+    class_recording = db.get(ClassRecording, class_id)
+
+    if class_recording is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No existe una clase con ese class_id.",
+        )
+
+    if not class_recording.audio_path:
+        raise HTTPException(
+            status_code=400,
+            detail="Primero debes extraer el audio de esta clase.",
+        )
+
+    try:
+        transcription = transcribe_audio(class_recording.audio_path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    transcript_filename = f"{class_id}_transcript.json"
+    transcript_path = OUTPUTS_DIR_RESPONSE / transcript_filename
+    resolved_transcript_path = BACKEND_DIR.parent / transcript_path
+
+    transcript_data = {
+        "class_id": class_id,
+        "audio_path": class_recording.audio_path,
+        "text": transcription["text"],
+        "raw_response": transcription["raw_response"],
+    }
+
+    try:
+        resolved_transcript_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with resolved_transcript_path.open("w", encoding="utf-8") as output_file:
+            json.dump(transcript_data, output_file, ensure_ascii=False, indent=2)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo guardar el archivo de transcripcion.",
+        ) from exc
+
+    class_recording.status = "transcribed"
+
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo actualizar el registro de la clase en la base de datos.",
+        ) from exc
+
+    return {
+        "class_id": class_recording.id,
+        "audio_path": class_recording.audio_path,
+        "transcript_path": transcript_path.as_posix(),
+        "text_preview": transcription["text"][:500],
+        "status": class_recording.status,
+        "message": "Audio transcribed successfully",
     }

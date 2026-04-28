@@ -52,6 +52,25 @@ DATABASE_URL=sqlite:///./classmentor.db
 
 Las tablas se crean automaticamente al arrancar el servidor si todavia no existen.
 
+## Configurar OpenAI para transcripcion
+
+La transcripcion usa la API de OpenAI. FastAPI puede arrancar aunque no exista `OPENAI_API_KEY`, pero el endpoint de transcripcion devolvera un error claro si intentas usarlo sin clave.
+
+En la carpeta `backend`, crea un archivo `.env`:
+
+```powershell
+copy .env.example .env
+```
+
+Edita `backend/.env` y configura:
+
+```text
+OPENAI_API_KEY=tu_clave_de_openai
+OPENAI_TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe
+```
+
+El archivo `.env` no debe subirse a GitHub. Ya esta incluido en `.gitignore`.
+
 ## Probar el endpoint de salud
 
 Abre en el navegador:
@@ -255,3 +274,52 @@ GET /classes/{class_id}
 ```
 
 veras `status` como `frames_extracted`.
+
+## Probar la transcripcion de audio
+
+Primero sube un MP4:
+
+```text
+POST /classes/upload
+```
+
+Despues extrae el audio:
+
+```text
+POST /classes/{class_id}/extract-audio
+```
+
+Cuando `GET /classes/{class_id}` muestre `audio_path` con una ruta valida, ejecuta en Swagger:
+
+```text
+POST /classes/{class_id}/transcribe
+```
+
+Si falta `OPENAI_API_KEY`, el backend devolvera un error claro sin romper `/health` ni el arranque del servidor.
+
+Si la clave existe y el audio es valido, se generara:
+
+```text
+backend/outputs/{class_id}_transcript.json
+```
+
+La respuesta sera parecida a esta:
+
+```json
+{
+  "class_id": "0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a",
+  "audio_path": "backend/audio/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a.wav",
+  "transcript_path": "backend/outputs/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a_transcript.json",
+  "text_preview": "Primeros 500 caracteres de la transcripcion...",
+  "status": "transcribed",
+  "message": "Audio transcribed successfully"
+}
+```
+
+Si vuelves a ejecutar:
+
+```text
+GET /classes/{class_id}
+```
+
+veras `status` como `transcribed`.
