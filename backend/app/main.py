@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.database.db import create_tables
 from app.routes.classes import router as classes_router
 
 
@@ -10,6 +11,12 @@ app = FastAPI(
 )
 
 app.include_router(classes_router)
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    """Prepara la base de datos al arrancar la aplicacion."""
+    create_tables()
 
 
 @app.get("/")

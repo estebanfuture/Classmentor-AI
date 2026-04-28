@@ -16,6 +16,30 @@ El backend quedara disponible en:
 http://127.0.0.1:8000
 ```
 
+## Base de datos SQLite
+
+ClassMentor AI usa SQLAlchemy para guardar un registro basico de cada clase subida.
+
+Si no configuras nada, la app crea automaticamente una base de datos SQLite en la carpeta `backend`:
+
+```text
+backend/classmentor.db
+```
+
+La URL por defecto es:
+
+```text
+sqlite:///./classmentor.db
+```
+
+Si mas adelante quieres usar otra ruta de base de datos, puedes definir `DATABASE_URL` en un archivo `.env` dentro de `backend`:
+
+```text
+DATABASE_URL=sqlite:///./classmentor.db
+```
+
+Las tablas se crean automaticamente al arrancar el servidor si todavia no existen.
+
 ## Probar el endpoint de salud
 
 Abre en el navegador:
@@ -73,3 +97,44 @@ backend/uploads/
 ```
 
 Si subes un archivo que no termina en `.mp4`, el backend devolvera un error HTTP 400 con un mensaje claro. Si ocurre un problema al guardar el archivo, devolvera HTTP 500.
+
+Ademas, la subida crea un registro en SQLite con:
+
+```text
+id = class_id
+original_filename = nombre original del archivo
+video_path = backend/uploads/{class_id}.mp4
+audio_path = null
+status = uploaded
+created_at = fecha de creacion
+```
+
+## Probar la lista de clases
+
+Despues de subir al menos un MP4, abre Swagger:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Busca y ejecuta:
+
+```text
+GET /classes
+```
+
+La respuesta sera una lista con las clases subidas.
+
+## Probar el detalle de una clase
+
+Copia el `class_id` devuelto por `POST /classes/upload` o el `id` devuelto por `GET /classes`.
+
+En Swagger, busca:
+
+```text
+GET /classes/{class_id}
+```
+
+Pega ese identificador y pulsa `Execute`.
+
+Si existe, veras los detalles de esa clase. Si no existe, el backend devolvera HTTP 404 con un mensaje claro.
