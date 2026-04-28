@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database.db import get_db
 from app.database.models import ClassRecording
 from app.services.audio_service import extract_audio
+from app.services.video_service import extract_frames
 
 
 router = APIRouter(prefix="/classes", tags=["classes"])
@@ -17,6 +18,7 @@ router = APIRouter(prefix="/classes", tags=["classes"])
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 UPLOAD_DIR = BACKEND_DIR / "uploads"
 AUDIO_DIR_RESPONSE = Path("backend") / "audio"
+FRAMES_DIR_RESPONSE = Path("backend") / "frames"
 
 
 def class_recording_to_dict(class_recording: ClassRecording) -> dict[str, str | None]:
@@ -163,4 +165,53 @@ def extract_class_audio(
         "audio_path": class_recording.audio_path,
         "status": class_recording.status,
         "message": "Audio extracted successfully",
+    }
+
+
+@router.post("/{class_id}/extract-frames")
+def extract_class_frames(
+    class_id: str,
+    db: Session = Depends(get_db),
+) -> dict[str, str | int | list[str]]:
+    """Extrae capturas JPG de una clase ya subida."""
+    class_recording = db.get(ClassRecording, class_id)
+
+    if class_recording is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No existe una clase con ese class_id.",
+        )
+
+    try:
+        frame_paths = extract_frames(
+            video_path=class_recording.video_path,
+            output_dir=str(FRAMES_DIR_RESPONSE),
+            class_id=class_id,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    class_recording.status = "frames_extracted"
+
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo actualizar el registro de la clase en la base de datos.",
+        ) from exc
+
+    frames_dir = (FRAMES_DIR_RESPONSE / class_id).as_posix()
+
+    return {
+        "class_id": class_recording.id,
+        "video_path": class_recording.video_path,
+        "frames_dir": frames_dir,
+        "total_frames": len(frame_paths),
+        "frame_paths": frame_paths,
+        "status": class_recording.status,
+        "message": "Frames extracted successfully",
     }

@@ -16,9 +16,9 @@ El backend quedara disponible en:
 http://127.0.0.1:8000
 ```
 
-## Requisito para extraer audio
+## Requisito para extraer audio y capturas
 
-Para usar la extraccion de audio, FFmpeg debe estar instalado en Windows y disponible en el `PATH`.
+Para usar la extraccion de audio o capturas, FFmpeg debe estar instalado en Windows y disponible en el `PATH`.
 
 Puedes comprobarlo desde una terminal con:
 
@@ -26,7 +26,7 @@ Puedes comprobarlo desde una terminal con:
 ffmpeg -version
 ```
 
-Si el comando muestra informacion de version, FastAPI podra usar FFmpeg desde el endpoint de extraccion.
+Si el comando muestra informacion de version, FastAPI podra usar FFmpeg desde los endpoints de extraccion.
 
 ## Base de datos SQLite
 
@@ -199,3 +199,59 @@ GET /classes/{class_id}
 ```
 
 veras `audio_path` con la ruta del WAV y `status` como `audio_extracted`.
+
+## Probar la extraccion de capturas
+
+Primero sube un MP4 con:
+
+```text
+POST /classes/upload
+```
+
+Despues, copia el `class_id` y ejecuta en Swagger:
+
+```text
+POST /classes/{class_id}/extract-frames
+```
+
+Por defecto, FFmpeg extraera una captura cada 10 segundos y guardara las imagenes en:
+
+```text
+backend/frames/{class_id}/
+```
+
+Los archivos tendran este formato:
+
+```text
+frame_0001.jpg
+frame_0002.jpg
+frame_0003.jpg
+```
+
+Si ya existen capturas anteriores para esa clase, el backend eliminara solo los archivos `frame_*.jpg` dentro de `backend/frames/{class_id}/` antes de generar las nuevas.
+
+La respuesta sera parecida a esta:
+
+```json
+{
+  "class_id": "0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a",
+  "video_path": "backend/uploads/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a.mp4",
+  "frames_dir": "backend/frames/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a",
+  "total_frames": 3,
+  "frame_paths": [
+    "backend/frames/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a/frame_0001.jpg",
+    "backend/frames/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a/frame_0002.jpg",
+    "backend/frames/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a/frame_0003.jpg"
+  ],
+  "status": "frames_extracted",
+  "message": "Frames extracted successfully"
+}
+```
+
+Si vuelves a ejecutar:
+
+```text
+GET /classes/{class_id}
+```
+
+veras `status` como `frames_extracted`.
