@@ -64,6 +64,10 @@ def clean_git_text(text: str) -> str:
             r"\bprepara archivos para ser comittados\b",
             "prepara archivos para incluirlos en el proximo commit.",
         ),
+        (
+            r"Los siguientes conceptos se reforzaron durante la clase",
+            "Los siguientes conceptos se añaden como refuerzo verificado para entender mejor la clase",
+        ),
         (r"\bcommands basicos\b", "comandos basicos"),
         (r"\bcommands básicos\b", "comandos básicos"),
         (r"\bmensaje de comité\b", "mensaje de commit"),
@@ -88,6 +92,28 @@ def clean_git_text(text: str) -> str:
     )
 
 
+def clean_common_spanish_text(text: str) -> str:
+    """Pulido pequeño de frases y tildes comunes para la demo."""
+    replacements = [
+        (
+            r"Los siguientes conceptos se reforzaron durante la clase",
+            "Los siguientes conceptos se añaden como refuerzo verificado para entender mejor la clase",
+        ),
+        (r"\bproximo\b", "próximo"),
+        (r"\bultima version\b", "última versión"),
+        (r"\bque archivos\b", "qué archivos"),
+        (r"\bpracticos\b", "prácticos"),
+        (r"\btranscripcion\b", "transcripción"),
+    ]
+
+    cleaned_text = text
+
+    for source, target in replacements:
+        cleaned_text = re.sub(source, target, cleaned_text, flags=re.IGNORECASE)
+
+    return cleaned_text
+
+
 def remove_internal_sections(markdown: str) -> str:
     """Quita secciones internas que no deben mostrarse al alumno."""
     internal_markers = (
@@ -97,6 +123,13 @@ def remove_internal_sections(markdown: str) -> str:
         "instrucciones internas",
         "instrucciones para el modelo",
         "prompt interno",
+        "recursos adicionales",
+        "foro de discusión",
+        "foro de discusi",
+        "conclusión final",
+        "conclusion final",
+        "conclusión final genérica",
+        "conclusion final generica",
     )
     cleaned_lines = []
     skipping_internal_section = False
@@ -200,9 +233,9 @@ def apply_quality_guard(
         if kind == "code":
             cleaned_parts.append(content)
         elif topic == "git":
-            cleaned_parts.append(clean_git_text(content))
+            cleaned_parts.append(clean_common_spanish_text(clean_git_text(content)))
         else:
-            cleaned_parts.append(content)
+            cleaned_parts.append(clean_common_spanish_text(content))
 
     cleaned_markdown = "".join(cleaned_parts).strip()
 
