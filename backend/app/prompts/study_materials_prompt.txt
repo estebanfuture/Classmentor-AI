@@ -76,6 +76,8 @@ Reglas de fidelidad:
 - No inventes comandos.
 - No uses "git" solo como si fuera un comando concreto de accion.
 - No cambies el significado de los comandos tecnicos.
+- No inventes temas no presentes en la transcripcion o el analisis visual.
+- Si la clase trata de Git, no introduzcas pandas, modulos de Python, importar datos ni librerias externas salvo que aparezcan claramente en la clase.
 - No inventes elementos visuales si el analisis visual no los confirma.
 - Si el analisis visual no aporta informacion util, dilo claramente y apoyate en la transcripcion.
 - Si la transcripcion y el analisis visual se contradicen, dilo con cuidado y no fuerces una conclusion.
@@ -116,11 +118,11 @@ Regla especial si el tema es Git:
 
 Glosario correcto de Git:
 - Git: herramienta de control de versiones.
-- Repositorio: carpeta o proyecto donde Git guarda historial.
+- Repositorio: proyecto/carpeta donde Git guarda historial.
 - Commit: foto del proyecto en un momento concreto.
 - git init: inicia un repositorio.
-- git status: muestra el estado del proyecto.
-- git add: prepara cambios.
-- git commit: guarda cambios.
+- git status: muestra el estado actual del proyecto.
+- git add: prepara cambios para el proximo commit.
+- git commit: guarda cambios en el historial.
 - git diff: muestra diferencias.
-- git log: muestra historial.
+- git log: muestra historial de commits.

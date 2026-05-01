@@ -158,12 +158,74 @@ def split_markdown_code_blocks(markdown: str) -> list[tuple[str, str]]:
     return parts
 
 
+def is_git_topic(text: str) -> bool:
+    """Detecta de forma simple si el material trata sobre Git."""
+    normalized_text = text.lower()
+    git_markers = [
+        "git",
+        "commit",
+        "commits",
+        "comit",
+        "comité",
+        "repositorio",
+        "control de versiones",
+    ]
+
+    return any(marker in normalized_text for marker in git_markers)
+
+
+def normalize_transcript_terms_for_topic(text: str, git_topic: bool) -> str:
+    """Corrige errores tipicos de transcripcion con un tema ya detectado."""
+    replacements = [
+        (r"\bgit a punto\b", "git add ."),
+        (r"\bgit add punto\b", "git add ."),
+        (r"\bgit como yo me\b", "git commit -m"),
+        (r"\bgit commit guion m\b", "git commit -m"),
+        (r"\bcomités\b", "commits"),
+        (r"\bcomité\b", "commit"),
+        (r"\bcomits\b", "commits"),
+        (r"\bcomit\b", "commit"),
+    ]
+
+    normalized_text = text
+
+    for source, target in replacements:
+        normalized_text = re.sub(source, target, normalized_text, flags=re.IGNORECASE)
+
+    if git_topic:
+        git_replacements = [
+            (r"\bcovid\b", "commit"),
+            (r"\bcómic\b", "commit"),
+            (r"\bcómico\b", "commit"),
+            (r"\bcónico?\b", "commit"),
+        ]
+
+        for source, target in git_replacements:
+            normalized_text = re.sub(
+                source,
+                target,
+                normalized_text,
+                flags=re.IGNORECASE,
+            )
+
+    return normalized_text
+
+
+def normalize_transcript_terms(text: str) -> str:
+    """Corrige errores tipicos de transcripcion antes de llamar al modelo."""
+    return normalize_transcript_terms_for_topic(text, git_topic=is_git_topic(text))
+
+
 def clean_git_language_in_text(text: str) -> str:
     """Corrige errores frecuentes de Git en texto normal."""
     replacements = [
         (
             r"`?git`?:\s*sirve para iniciar un repositorio",
             "`git init`: sirve para iniciar un repositorio Git.",
+        ),
+        (
+            r"`?git`?\s+sirve para iniciar un repositorio",
+            "`git init` sirve para iniciar un repositorio Git.",
         ),
         (
             r"`?git init`?:\s*sirve para ver los cambios en los archivos",
@@ -173,6 +235,14 @@ def clean_git_language_in_text(text: str) -> str:
             r"`?git init`?:\s*sirve para ver cambios",
             "`git status`: sirve para ver el estado actual del proyecto.",
         ),
+        (
+            r"`?git init`?:\s*sirve para ver el estado",
+            "`git status`: sirve para ver el estado actual del proyecto.",
+        ),
+        (
+            r"`?git init`?\s+sirve para ver cambios",
+            "`git status` sirve para ver el estado actual del proyecto.",
+        ),
         (r"\bcommands básicos\b", "comandos básicos"),
         (
             r"\bcomando\s+`?git`?(?=[^.\n]*iniciar)",
@@ -181,6 +251,10 @@ def clean_git_language_in_text(text: str) -> str:
         (
             r"\bgit add para agregar archivos al repositorio\b",
             "git add prepara archivos para incluirlos en el próximo commit",
+        ),
+        (
+            r"\bgit add agrega archivos al repositorio\b",
+            "git add prepara archivos para incluirlos en el próximo commit.",
         ),
         (
             r"\bprepara archivos para ser comittados\b",
@@ -216,6 +290,44 @@ def clean_git_language_in_text(text: str) -> str:
     )
 
 
+def remove_internal_model_sections(markdown: str) -> str:
+    """Quita secciones que son instrucciones internas, no contenido educativo."""
+    internal_headings = (
+        "vision data",
+        "instrucciones internas",
+        "instrucciones para el modelo",
+        "prompt interno",
+        "reglas pedagog",
+    )
+    cleaned_lines = []
+    skipping_internal_section = False
+
+    for line in markdown.splitlines():
+        stripped_line = line.strip()
+        normalized_heading = stripped_line.lstrip("#").strip().lower().rstrip(":")
+        is_heading = stripped_line.startswith("#")
+
+        if any(
+            normalized_heading.startswith(heading)
+            for heading in internal_headings
+        ):
+            skipping_internal_section = is_heading
+            continue
+
+        if skipping_internal_section and is_heading:
+            skipping_internal_section = False
+
+        if skipping_internal_section:
+            continue
+
+        if any(heading in stripped_line.lower() for heading in internal_headings):
+            continue
+
+        cleaned_lines.append(line)
+
+    return "\n".join(cleaned_lines).strip()
+
+
 def remove_internal_pedagogy_section(markdown: str) -> str:
     """Elimina secciones internas del prompt si el modelo las copia."""
     return re.sub(
@@ -224,6 +336,37 @@ def remove_internal_pedagogy_section(markdown: str) -> str:
         markdown,
         flags=re.DOTALL,
     ).strip()
+
+
+def remove_unsupported_git_lines(markdown: str) -> str:
+    """Elimina temas claramente ajenos cuando la clase detectada es Git."""
+    unsupported_terms = [
+        "pandas",
+        "os módulo",
+        "os modulo",
+        "biblioteca pandas",
+        "importar datos",
+    ]
+    cleaned_parts = []
+
+    for kind, content in split_markdown_code_blocks(markdown):
+        if kind == "code":
+            cleaned_parts.append(content)
+            continue
+
+        kept_lines = []
+
+        for line in content.splitlines(keepends=True):
+            normalized_line = line.lower()
+
+            if any(term in normalized_line for term in unsupported_terms):
+                continue
+
+            kept_lines.append(line)
+
+        cleaned_parts.append("".join(kept_lines))
+
+    return "".join(cleaned_parts).strip()
 
 
 def remove_incomplete_transcription_notes(markdown: str) -> str:
@@ -245,6 +388,8 @@ def remove_incomplete_transcription_notes(markdown: str) -> str:
             if (
                 normalized_line.endswith("Si aparece una frase parecida a")
                 or normalized_line.endswith("->")
+                or normalized_line.endswith("probablemente")
+                or normalized_line.endswith("puede ser")
                 or normalized_line in ("-", "- ")
             ):
                 continue
@@ -254,10 +399,8 @@ def remove_incomplete_transcription_notes(markdown: str) -> str:
     return "\n".join(cleaned_lines).strip()
 
 
-def clean_study_markdown(markdown: str) -> str:
-    """Aplica correcciones pedagogicas simples sin romper bloques de codigo."""
-    markdown = remove_internal_pedagogy_section(markdown)
-    markdown = remove_incomplete_transcription_notes(markdown)
+def apply_git_quality_guard(markdown: str) -> str:
+    """Aplica correcciones seguras de Git sin tocar bloques de codigo."""
     cleaned_parts = []
 
     for kind, content in split_markdown_code_blocks(markdown):
@@ -267,6 +410,45 @@ def clean_study_markdown(markdown: str) -> str:
             cleaned_parts.append(clean_git_language_in_text(content))
 
     return "".join(cleaned_parts).strip()
+
+
+def clean_study_markdown(markdown: str, topic: str | None = None) -> str:
+    """Aplica correcciones pedagogicas simples sin romper bloques de codigo."""
+    detected_topic = topic or ("git" if is_git_topic(markdown) else None)
+    markdown = remove_internal_pedagogy_section(markdown)
+    markdown = remove_internal_model_sections(markdown)
+    markdown = remove_incomplete_transcription_notes(markdown)
+    markdown = apply_git_quality_guard(markdown)
+
+    if detected_topic == "git":
+        markdown = remove_unsupported_git_lines(markdown)
+
+    return markdown.strip()
+
+
+def normalize_transcript_data(transcript_data: dict) -> dict:
+    """Devuelve una copia de transcript_data con el texto normalizado."""
+    serialized_data = json.dumps(transcript_data, ensure_ascii=False)
+    git_topic = is_git_topic(serialized_data)
+
+    def normalize_value(value):
+        if isinstance(value, str):
+            return normalize_transcript_terms_for_topic(value, git_topic=git_topic)
+
+        if isinstance(value, list):
+            return [normalize_value(item) for item in value]
+
+        if isinstance(value, dict):
+            return {
+                key: normalize_value(item)
+                for key, item in value.items()
+            }
+
+        return value
+
+    normalized_data = normalize_value(transcript_data)
+
+    return normalized_data
 
 
 def build_user_message(
@@ -296,7 +478,17 @@ def generate_study_materials(
 ) -> str:
     """Genera materiales de estudio en Markdown usando Ollama local."""
     prompt = load_study_materials_prompt()
-    user_message = build_user_message(class_id, transcript_data, vision_data)
+    normalized_transcript_data = normalize_transcript_data(transcript_data)
+    detected_topic = (
+        "git"
+        if is_git_topic(json.dumps(normalized_transcript_data, ensure_ascii=False))
+        else None
+    )
+    user_message = build_user_message(
+        class_id,
+        normalized_transcript_data,
+        vision_data,
+    )
 
     payload = {
         "model": OLLAMA_TEXT_MODEL,
@@ -363,4 +555,4 @@ def generate_study_materials(
     cleaned_markdown = remove_outer_markdown_fence(cleaned_markdown)
     cleaned_markdown = clean_unexpected_foreign_characters(cleaned_markdown)
 
-    return clean_study_markdown(cleaned_markdown)
+    return clean_study_markdown(cleaned_markdown, topic=detected_topic)
