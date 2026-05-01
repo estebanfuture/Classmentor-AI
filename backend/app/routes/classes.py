@@ -9,7 +9,12 @@ from sqlalchemy.orm import Session
 
 from app.database.db import get_db
 from app.database.models import ClassRecording
-from app.core.config import MAX_FRAMES_TO_ANALYZE, STUDY_PROVIDER, VISION_PROVIDER
+from app.core.config import (
+    MAX_FRAMES_TO_ANALYZE,
+    STUDY_PROVIDER,
+    VISION_PROVIDER,
+    VISION_REQUIRED,
+)
 from app.services.audio_service import extract_audio
 from app.services.study_material_service import (
     StudyMaterialServiceError,
@@ -73,7 +78,8 @@ def fail_process_all(
     class_recording: ClassRecording,
     failed_step: str,
     error_message: str,
-) -> dict[str, str]:
+    warnings: list[dict[str, str]] | None = None,
+) -> dict:
     """Marca una clase como fallida y devuelve una respuesta clara."""
     class_recording.status = "failed"
 
@@ -87,6 +93,7 @@ def fail_process_all(
         "status": "failed",
         "failed_step": failed_step,
         "error_message": error_message,
+        "warnings": warnings or [],
     }
 
 
@@ -613,6 +620,7 @@ def process_all_class(
         "vision_path": None,
         "study_material_path": None,
     }
+    warnings = []
 
     try:
         update_class_status(db, class_recording, "processing_audio")
@@ -665,33 +673,40 @@ def process_all_class(
     except (FileNotFoundError, RuntimeError, OSError) as exc:
         return fail_process_all(db, class_recording, "transcription", str(exc))
 
+    vision_path = OUTPUTS_DIR_RESPONSE / f"{class_id}_vision.json"
+    resolved_vision_path = resolve_backend_response_path(vision_path)
+    vision_data = None
+
     try:
-        if VISION_PROVIDER.lower().strip() != "ollama":
-            raise RuntimeError("VISION_PROVIDER debe ser 'ollama' en esta fase.")
+        if resolved_vision_path.exists():
+            vision_data = json.loads(resolved_vision_path.read_text(encoding="utf-8"))
+            steps["vision"] = "reused"
+            outputs["vision_path"] = vision_path.as_posix()
+        else:
+            if VISION_PROVIDER.lower().strip() != "ollama":
+                raise RuntimeError("VISION_PROVIDER debe ser 'ollama' en esta fase.")
 
-        update_class_status(db, class_recording, "analyzing_frames")
-        vision_results = analyze_frames(
-            frame_paths=frame_paths,
-            max_frames=MAX_FRAMES_TO_ANALYZE,
-        )
+            update_class_status(db, class_recording, "analyzing_frames")
+            vision_results = analyze_frames(
+                frame_paths=frame_paths,
+                max_frames=MAX_FRAMES_TO_ANALYZE,
+            )
 
-        vision_path = OUTPUTS_DIR_RESPONSE / f"{class_id}_vision.json"
-        resolved_vision_path = resolve_backend_response_path(vision_path)
-        vision_data = {
-            "class_id": class_id,
-            "frames_analyzed": len(vision_results),
-            "max_frames_to_analyze": MAX_FRAMES_TO_ANALYZE,
-            "results": vision_results,
-        }
+            vision_data = {
+                "class_id": class_id,
+                "frames_analyzed": len(vision_results),
+                "max_frames_to_analyze": MAX_FRAMES_TO_ANALYZE,
+                "results": vision_results,
+            }
 
-        resolved_vision_path.parent.mkdir(parents=True, exist_ok=True)
+            resolved_vision_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with resolved_vision_path.open("w", encoding="utf-8") as output_file:
-            json.dump(vision_data, output_file, ensure_ascii=False, indent=2)
+            with resolved_vision_path.open("w", encoding="utf-8") as output_file:
+                json.dump(vision_data, output_file, ensure_ascii=False, indent=2)
 
-        update_class_status(db, class_recording, "vision_analyzed")
-        steps["vision"] = "completed"
-        outputs["vision_path"] = vision_path.as_posix()
+            update_class_status(db, class_recording, "vision_analyzed")
+            steps["vision"] = "completed"
+            outputs["vision_path"] = vision_path.as_posix()
     except InvalidVisionJSONError as exc:
         raw_response_path = OUTPUTS_DIR_RESPONSE / f"{class_id}_vision_raw_response.txt"
         resolved_raw_response_path = resolve_backend_response_path(raw_response_path)
@@ -706,7 +721,17 @@ def process_all_class(
         except OSError:
             error_message = f"{exc} No se pudo guardar la respuesta cruda."
 
-        return fail_process_all(db, class_recording, "vision", error_message)
+        if VISION_REQUIRED:
+            return fail_process_all(db, class_recording, "vision", error_message)
+
+        warnings.append(
+            {
+                "step": "vision",
+                "message": error_message,
+            }
+        )
+        steps["vision"] = "warning"
+        vision_data = None
     except (
         FileNotFoundError,
         OllamaModelNotFoundError,
@@ -714,8 +739,19 @@ def process_all_class(
         VisionServiceError,
         RuntimeError,
         OSError,
+        json.JSONDecodeError,
     ) as exc:
-        return fail_process_all(db, class_recording, "vision", str(exc))
+        if VISION_REQUIRED:
+            return fail_process_all(db, class_recording, "vision", str(exc))
+
+        warnings.append(
+            {
+                "step": "vision",
+                "message": str(exc),
+            }
+        )
+        steps["vision"] = "warning"
+        vision_data = None
 
     try:
         if STUDY_PROVIDER.lower().strip() != "ollama":
@@ -748,17 +784,36 @@ def process_all_class(
         RuntimeError,
         OSError,
     ) as exc:
-        return fail_process_all(db, class_recording, "study_materials", str(exc))
+        return fail_process_all(
+            db,
+            class_recording,
+            "study_materials",
+            str(exc),
+            warnings=warnings,
+        )
+
+    final_status = "completed_with_warnings" if warnings else "completed"
 
     try:
-        update_class_status(db, class_recording, "completed")
+        update_class_status(db, class_recording, final_status)
     except RuntimeError as exc:
-        return fail_process_all(db, class_recording, "completed", str(exc))
+        return fail_process_all(
+            db,
+            class_recording,
+            "completed",
+            str(exc),
+            warnings=warnings,
+        )
 
     return {
         "class_id": class_recording.id,
-        "status": "completed",
+        "status": final_status,
         "steps": steps,
         "outputs": outputs,
-        "message": "Class processed successfully",
+        "warnings": warnings,
+        "message": (
+            "Class processed successfully with warnings"
+            if warnings
+            else "Class processed successfully"
+        ),
     }

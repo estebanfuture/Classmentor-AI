@@ -531,7 +531,18 @@ STUDY_PROVIDER=ollama
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_VISION_MODEL=llama3.2-vision
 OLLAMA_TEXT_MODEL=deepseek-r1-14b-16k:latest
+VISION_REQUIRED=false
 ```
+
+En el MVP local, la vision es opcional dentro de `process-all` por defecto. Si Ollama Vision tarda demasiado o falla y `VISION_REQUIRED=false`, el pipeline continua con la transcripcion y genera materiales de estudio igualmente.
+
+Si quieres exigir que el analisis visual sea obligatorio, configura:
+
+```text
+VISION_REQUIRED=true
+```
+
+Con `VISION_REQUIRED=true`, si falla la vision, `process-all` se detiene y devuelve `failed_step: "vision"`.
 
 Tambien comprueba que FFmpeg y Ollama funcionan:
 
@@ -588,9 +599,42 @@ La respuesta sera parecida a esta:
     "vision_path": "backend/outputs/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a_vision.json",
     "study_material_path": "backend/outputs/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a_study_material.md"
   },
+  "warnings": [],
   "message": "Class processed successfully"
 }
 ```
+
+Si Ollama Vision falla y `VISION_REQUIRED=false`, la respuesta sera parecida a esta:
+
+```json
+{
+  "class_id": "0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a",
+  "status": "completed_with_warnings",
+  "steps": {
+    "audio": "completed",
+    "frames": "completed",
+    "transcription": "completed",
+    "vision": "warning",
+    "study_materials": "completed"
+  },
+  "outputs": {
+    "audio_path": "backend/audio/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a.wav",
+    "frames_dir": "backend/frames/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a",
+    "transcript_path": "backend/outputs/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a_transcript.json",
+    "vision_path": null,
+    "study_material_path": "backend/outputs/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a_study_material.md"
+  },
+  "warnings": [
+    {
+      "step": "vision",
+      "message": "Ollama tardo demasiado en responder al analisis visual."
+    }
+  ],
+  "message": "Class processed successfully with warnings"
+}
+```
+
+Si ya existe `backend/outputs/{class_id}_vision.json`, `process-all` lo reutiliza y no vuelve a analizar los frames con Ollama Vision.
 
 Si falla un paso, el endpoint detiene el proceso, marca la clase como `failed` y devuelve:
 
@@ -599,7 +643,8 @@ Si falla un paso, el endpoint detiene el proceso, marca la clase como `failed` y
   "class_id": "0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a",
   "status": "failed",
   "failed_step": "vision",
-  "error_message": "Mensaje claro del error"
+  "error_message": "Mensaje claro del error",
+  "warnings": []
 }
 ```
 
@@ -609,7 +654,7 @@ Si vuelves a ejecutar:
 GET /classes/{class_id}
 ```
 
-veras `status` como `completed` si el pipeline termino correctamente.
+veras `status` como `completed` si el pipeline termino correctamente, o `completed_with_warnings` si termino sin vision.
 
 ## Probar la transcripcion de audio
 

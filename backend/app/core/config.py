@@ -24,6 +24,7 @@ VISION_PROVIDER = os.getenv("VISION_PROVIDER", "ollama")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "llama3.2-vision")
 MAX_FRAMES_TO_ANALYZE = int(os.getenv("MAX_FRAMES_TO_ANALYZE", "30"))
+VISION_REQUIRED = os.getenv("VISION_REQUIRED", "false").lower().strip() == "true"
 STUDY_PROVIDER = os.getenv("STUDY_PROVIDER", "ollama")
 OLLAMA_TEXT_MODEL = os.getenv("OLLAMA_TEXT_MODEL", "deepseek-r1-14b-16k:latest")
 OLLAMA_TIMEOUT_SECONDS = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "300"))
