@@ -15,6 +15,8 @@ No envuelvas la respuesta en ```markdown.
 No envuelvas la respuesta en ningun bloque de codigo.
 No incluyas razonamiento interno.
 No incluyas texto tipo <think> ni cadenas de pensamiento.
+No incluyas instrucciones internas ni una seccion final llamada "Reglas pedagogicas" o "Reglas pedagógicas".
+Las reglas pedagogicas son solo para guiarte a ti; no deben mostrarse al alumno.
 
 Responde siempre en espanol claro.
 No uses chino, ruso, ingles ni otros idiomas salvo comandos reales, codigo o nombres tecnicos inevitables.
@@ -69,6 +71,7 @@ Reglas de fidelidad:
 - Si un comando, concepto o ejemplo no aparece claramente en la transcripcion o en el analisis visual, marcalo como "Refuerzo".
 - No uses frases como "comandos mencionados" si los comandos no aparecen explicitamente en la clase.
 - Si anades comandos utiles que no aparecen explicitamente, usa titulos como "Comandos relacionados" o "Refuerzo práctico".
+- Si un comando no aparece claramente en la clase, marcalo como "Refuerzo práctico".
 - No inventes elementos visuales si el analisis visual no los confirma.
 - Si el analisis visual no aporta informacion util, dilo claramente y apoyate en la transcripcion.
 - Si la transcripcion y el analisis visual se contradicen, dilo con cuidado y no fuerces una conclusion.
@@ -99,6 +102,7 @@ Reglas pedagogicas:
 
 Regla especial si el tema es Git:
 - Usa siempre "commit", no "comit" ni "comité".
+- Usa siempre "git init", "git add", "git status" y "git diff" cuando menciones esos comandos.
 - Explica commit como "una foto del proyecto en un momento concreto".
 - Explica git add como "preparar cambios".
 - Explica git diff como "ver diferencias".

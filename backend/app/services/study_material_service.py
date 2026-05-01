@@ -161,12 +161,21 @@ def split_markdown_code_blocks(markdown: str) -> list[tuple[str, str]]:
 def clean_git_language_in_text(text: str) -> str:
     """Corrige errores frecuentes de Git en texto normal."""
     replacements = [
+        (
+            r"\bprepara archivos para ser comittados\b",
+            "prepara archivos para incluirlos en el próximo commit",
+        ),
+        (
+            r"\bgit:\s*para iniciar un repositorio\b",
+            "`git init`: para iniciar un repositorio",
+        ),
         (r"\bmensaje de comité\b", "mensaje de commit"),
         (r"\bhistoria de comites\b", "historial de commits"),
         (r"\bhacer un comité\b", "hacer un commit"),
         (r"\bcrear un comité\b", "crear un commit"),
         (r"\bmomento con grito\b", "momento concreto"),
         (r"\bestación de trabajo\b", "área de preparación"),
+        (r"\bcomittados\b", "incluidos en el próximo commit"),
         (r"\bcomités\b", "commits"),
         (r"\bcomité\b", "commit"),
         (r"\bcomits\b", "commits"),
@@ -186,8 +195,19 @@ def clean_git_language_in_text(text: str) -> str:
     )
 
 
+def remove_internal_pedagogy_section(markdown: str) -> str:
+    """Elimina secciones internas del prompt si el modelo las copia."""
+    return re.sub(
+        r"(?im)^#{0,6}\s*Reglas\s+pedag\S*:?\s*$.*",
+        "",
+        markdown,
+        flags=re.DOTALL,
+    ).strip()
+
+
 def clean_study_markdown(markdown: str) -> str:
     """Aplica correcciones pedagogicas simples sin romper bloques de codigo."""
+    markdown = remove_internal_pedagogy_section(markdown)
     cleaned_parts = []
 
     for kind, content in split_markdown_code_blocks(markdown):
