@@ -162,6 +162,27 @@ def clean_git_language_in_text(text: str) -> str:
     """Corrige errores frecuentes de Git en texto normal."""
     replacements = [
         (
+            r"`?git`?:\s*sirve para iniciar un repositorio",
+            "`git init`: sirve para iniciar un repositorio Git.",
+        ),
+        (
+            r"`?git init`?:\s*sirve para ver los cambios en los archivos",
+            "`git status`: sirve para ver el estado actual del proyecto.",
+        ),
+        (
+            r"`?git init`?:\s*sirve para ver cambios",
+            "`git status`: sirve para ver el estado actual del proyecto.",
+        ),
+        (r"\bcommands básicos\b", "comandos básicos"),
+        (
+            r"\bcomando\s+`?git`?(?=[^.\n]*iniciar)",
+            "comando `git init`",
+        ),
+        (
+            r"\bgit add para agregar archivos al repositorio\b",
+            "git add prepara archivos para incluirlos en el próximo commit",
+        ),
+        (
             r"\bprepara archivos para ser comittados\b",
             "prepara archivos para incluirlos en el próximo commit",
         ),
@@ -205,9 +226,38 @@ def remove_internal_pedagogy_section(markdown: str) -> str:
     ).strip()
 
 
+def remove_incomplete_transcription_notes(markdown: str) -> str:
+    """Elimina notas incompletas en Posibles errores de transcripcion."""
+    cleaned_lines = []
+    inside_transcription_notes = False
+
+    for line in markdown.splitlines():
+        stripped_line = line.strip()
+
+        if stripped_line.startswith("## "):
+            inside_transcription_notes = (
+                "posibles errores de transcrip" in stripped_line.lower()
+            )
+
+        if inside_transcription_notes:
+            normalized_line = stripped_line.rstrip(".:;,- ")
+
+            if (
+                normalized_line.endswith("Si aparece una frase parecida a")
+                or normalized_line.endswith("->")
+                or normalized_line in ("-", "- ")
+            ):
+                continue
+
+        cleaned_lines.append(line)
+
+    return "\n".join(cleaned_lines).strip()
+
+
 def clean_study_markdown(markdown: str) -> str:
     """Aplica correcciones pedagogicas simples sin romper bloques de codigo."""
     markdown = remove_internal_pedagogy_section(markdown)
+    markdown = remove_incomplete_transcription_notes(markdown)
     cleaned_parts = []
 
     for kind, content in split_markdown_code_blocks(markdown):

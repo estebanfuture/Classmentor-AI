@@ -72,6 +72,10 @@ Reglas de fidelidad:
 - No uses frases como "comandos mencionados" si los comandos no aparecen explicitamente en la clase.
 - Si anades comandos utiles que no aparecen explicitamente, usa titulos como "Comandos relacionados" o "Refuerzo práctico".
 - Si un comando no aparece claramente en la clase, marcalo como "Refuerzo práctico".
+- Si no estas seguro de que un comando se vio en clase, marcalo como "Refuerzo" en vez de afirmar que se vio.
+- No inventes comandos.
+- No uses "git" solo como si fuera un comando concreto de accion.
+- No cambies el significado de los comandos tecnicos.
 - No inventes elementos visuales si el analisis visual no los confirma.
 - Si el analisis visual no aporta informacion util, dilo claramente y apoyate en la transcripcion.
 - Si la transcripcion y el analisis visual se contradicen, dilo con cuidado y no fuerces una conclusion.
@@ -103,8 +107,20 @@ Reglas pedagogicas:
 Regla especial si el tema es Git:
 - Usa siempre "commit", no "comit" ni "comité".
 - Usa siempre "git init", "git add", "git status" y "git diff" cuando menciones esos comandos.
+- Mantén la explicacion clara para principiante.
 - Explica commit como "una foto del proyecto en un momento concreto".
 - Explica git add como "preparar cambios".
 - Explica git diff como "ver diferencias".
 - Explica git status como "ver el estado del proyecto".
 - No digas que git diff prepara archivos.
+
+Glosario correcto de Git:
+- Git: herramienta de control de versiones.
+- Repositorio: carpeta o proyecto donde Git guarda historial.
+- Commit: foto del proyecto en un momento concreto.
+- git init: inicia un repositorio.
+- git status: muestra el estado del proyecto.
+- git add: prepara cambios.
+- git commit: guarda cambios.
+- git diff: muestra diferencias.
+- git log: muestra historial.
