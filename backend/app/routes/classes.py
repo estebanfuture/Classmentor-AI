@@ -9,8 +9,14 @@ from sqlalchemy.orm import Session
 
 from app.database.db import get_db
 from app.database.models import ClassRecording
-from app.core.config import MAX_FRAMES_TO_ANALYZE, VISION_PROVIDER
+from app.core.config import MAX_FRAMES_TO_ANALYZE, STUDY_PROVIDER, VISION_PROVIDER
 from app.services.audio_service import extract_audio
+from app.services.study_material_service import (
+    StudyMaterialServiceError,
+    StudyOllamaConnectionError,
+    StudyOllamaModelNotFoundError,
+    generate_study_materials,
+)
 from app.services.transcription_service import transcribe_audio
 from app.services.video_service import extract_frames
 from app.services.vision_service import (
@@ -401,4 +407,117 @@ def analyze_class_frames(
         "vision_path": vision_path.as_posix(),
         "status": class_recording.status,
         "message": "Frames analyzed successfully",
+    }
+
+
+@router.post("/{class_id}/generate-study-materials")
+def generate_class_study_materials(
+    class_id: str,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    """Genera materiales de estudio Markdown desde transcripcion y vision."""
+    class_recording = db.get(ClassRecording, class_id)
+
+    if class_recording is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No existe una clase con ese class_id.",
+        )
+
+    if STUDY_PROVIDER.lower().strip() != "ollama":
+        raise HTTPException(
+            status_code=500,
+            detail="STUDY_PROVIDER debe ser 'ollama' en esta fase.",
+        )
+
+    transcript_filename = f"{class_id}_transcript.json"
+    transcript_path = OUTPUTS_DIR_RESPONSE / transcript_filename
+    resolved_transcript_path = BACKEND_DIR.parent / transcript_path
+
+    if not resolved_transcript_path.exists():
+        raise HTTPException(
+            status_code=400,
+            detail="No existe la transcripcion. Primero ejecuta transcribe.",
+        )
+
+    try:
+        transcript_data = json.loads(
+            resolved_transcript_path.read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo leer el JSON de transcripcion.",
+        ) from exc
+
+    vision_filename = f"{class_id}_vision.json"
+    vision_path = OUTPUTS_DIR_RESPONSE / vision_filename
+    resolved_vision_path = BACKEND_DIR.parent / vision_path
+    vision_data = None
+
+    if resolved_vision_path.exists():
+        try:
+            vision_data = json.loads(resolved_vision_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise HTTPException(
+                status_code=500,
+                detail="No se pudo leer el JSON de analisis visual.",
+            ) from exc
+
+    transcript_text = str(transcript_data.get("text", "")).strip()
+    warning = None
+
+    if not transcript_text:
+        warning = (
+            "Advertencia: la transcripcion esta vacia. "
+            "Se genero un material minimo con la informacion disponible."
+        )
+
+    try:
+        markdown = generate_study_materials(
+            class_id=class_id,
+            transcript_data=transcript_data,
+            vision_data=vision_data,
+        )
+    except StudyOllamaModelNotFoundError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except StudyOllamaConnectionError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except StudyMaterialServiceError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    study_material_filename = f"{class_id}_study_material.md"
+    study_material_path = OUTPUTS_DIR_RESPONSE / study_material_filename
+    resolved_study_material_path = BACKEND_DIR.parent / study_material_path
+
+    try:
+        resolved_study_material_path.parent.mkdir(parents=True, exist_ok=True)
+        resolved_study_material_path.write_text(markdown, encoding="utf-8")
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo guardar el archivo Markdown de materiales de estudio.",
+        ) from exc
+
+    class_recording.status = "study_materials_generated"
+
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo actualizar el registro de la clase en la base de datos.",
+        ) from exc
+
+    message = "Study materials generated successfully"
+
+    if warning:
+        message = f"{message}. {warning}"
+
+    return {
+        "class_id": class_recording.id,
+        "study_material_path": study_material_path.as_posix(),
+        "status": class_recording.status,
+        "message": message,
     }

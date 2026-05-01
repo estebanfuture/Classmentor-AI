@@ -128,6 +128,39 @@ MAX_FRAMES_TO_ANALYZE=30
 
 En esta fase ClassMentor AI solo usa Ollama para vision. OpenAI Vision todavia no esta implementado.
 
+## Configurar materiales de estudio con Ollama
+
+La generacion de materiales de estudio usa Ollama local con un modelo de texto.
+
+En `backend/.env`, configura:
+
+```text
+STUDY_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_TEXT_MODEL=deepseek-r1-14b-16k:latest
+OLLAMA_TIMEOUT_SECONDS=300
+```
+
+Si `STUDY_PROVIDER` no existe, el backend usa `ollama` por defecto.
+
+Descarga el modelo de texto:
+
+```powershell
+ollama pull deepseek-r1-14b-16k
+```
+
+Comprueba que Ollama responde y que el modelo aparece instalado:
+
+```powershell
+curl http://localhost:11434/api/tags
+```
+
+El valor recomendado para desarrollo es:
+
+```text
+OLLAMA_TEXT_MODEL=deepseek-r1-14b-16k:latest
+```
+
 ## Probar el endpoint de salud
 
 Abre en el navegador:
@@ -408,6 +441,82 @@ GET /classes/{class_id}
 ```
 
 veras `status` como `vision_analyzed`.
+
+## Probar la generacion de materiales de estudio
+
+Primero sube un MP4:
+
+```text
+POST /classes/upload
+```
+
+Despues extrae y transcribe el audio:
+
+```text
+POST /classes/{class_id}/extract-audio
+POST /classes/{class_id}/transcribe
+```
+
+Opcionalmente, extrae y analiza capturas para enriquecer el material:
+
+```text
+POST /classes/{class_id}/extract-frames
+POST /classes/{class_id}/analyze-frames
+```
+
+El endpoint de materiales funciona aunque no exista `backend/outputs/{class_id}_vision.json`; en ese caso usa solo la transcripcion.
+
+Asegurate de tener Ollama corriendo y el modelo de texto descargado:
+
+```powershell
+ollama pull deepseek-r1-14b-16k
+curl http://localhost:11434/api/tags
+```
+
+Luego abre Swagger:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Busca y ejecuta:
+
+```text
+POST /classes/{class_id}/generate-study-materials
+```
+
+Si todo va bien, se generara:
+
+```text
+backend/outputs/{class_id}_study_material.md
+```
+
+La respuesta sera parecida a esta:
+
+```json
+{
+  "class_id": "0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a",
+  "study_material_path": "backend/outputs/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a_study_material.md",
+  "status": "study_materials_generated",
+  "message": "Study materials generated successfully"
+}
+```
+
+Si falta la transcripcion, el endpoint devolvera HTTP 400 indicando que primero debes ejecutar `transcribe`.
+
+Si falta el modelo de texto, el error indicara que debes ejecutar:
+
+```powershell
+ollama pull deepseek-r1-14b-16k
+```
+
+Si vuelves a ejecutar:
+
+```text
+GET /classes/{class_id}
+```
+
+veras `status` como `study_materials_generated`.
 
 ## Probar la transcripcion de audio
 

@@ -1,0 +1,176 @@
+import json
+import re
+from pathlib import Path
+
+import httpx
+
+from app.core.config import (
+    OLLAMA_BASE_URL,
+    OLLAMA_TEXT_MODEL,
+    OLLAMA_TIMEOUT_SECONDS,
+)
+
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+STUDY_MATERIALS_PROMPT_PATH = (
+    BACKEND_DIR / "app" / "prompts" / "study_materials_prompt.txt"
+)
+
+
+class StudyMaterialServiceError(RuntimeError):
+    """Error base para problemas generando materiales de estudio."""
+
+
+class StudyOllamaConnectionError(StudyMaterialServiceError):
+    """Ollama no esta disponible o no responde."""
+
+
+class StudyOllamaModelNotFoundError(StudyMaterialServiceError):
+    """El modelo de texto configurado no existe en Ollama."""
+
+
+def load_study_materials_prompt() -> str:
+    """Lee el prompt usado para generar materiales de estudio."""
+    try:
+        return STUDY_MATERIALS_PROMPT_PATH.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise StudyMaterialServiceError(
+            "No se pudo leer backend/app/prompts/study_materials_prompt.txt."
+        ) from exc
+
+
+def extract_message_content(response_data: dict) -> str:
+    """Obtiene el texto devuelto por /api/chat de Ollama."""
+    message = response_data.get("message", {})
+
+    if isinstance(message, dict):
+        content = message.get("content", "")
+        if isinstance(content, str):
+            return content.strip()
+
+    return ""
+
+
+def is_model_missing_error(status_code: int, response_text: str) -> bool:
+    """Detecta el error tipico cuando falta un modelo en Ollama."""
+    normalized_text = response_text.lower()
+    model_name = OLLAMA_TEXT_MODEL.lower()
+
+    return (
+        status_code == 404
+        or "not found" in normalized_text
+        or "pull" in normalized_text
+    ) and (model_name in normalized_text or "model" in normalized_text)
+
+
+def remove_thinking_blocks(markdown: str) -> str:
+    """Elimina bloques <think> si un modelo razonador los incluye por error."""
+    cleaned_markdown = re.sub(
+        r"<think>.*?</think>",
+        "",
+        markdown,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    if cleaned_markdown.lower().startswith("<think"):
+        first_heading_index = cleaned_markdown.find("#")
+
+        if first_heading_index >= 0:
+            cleaned_markdown = cleaned_markdown[first_heading_index:]
+
+    cleaned_markdown = cleaned_markdown.replace("<think>", "").replace("</think>", "")
+
+    return cleaned_markdown.strip()
+
+
+def build_user_message(
+    class_id: str,
+    transcript_data: dict,
+    vision_data: dict | None,
+) -> str:
+    """Construye el mensaje con los datos de la clase para Ollama."""
+    data = {
+        "class_id": class_id,
+        "transcript_data": transcript_data,
+        "vision_data": vision_data,
+    }
+
+    return (
+        "Genera el material de estudio para esta clase usando estos datos JSON.\n"
+        "Si vision_data es null o no aporta informacion, usa principalmente "
+        "transcript_data.\n\n"
+        f"{json.dumps(data, ensure_ascii=False, indent=2)}"
+    )
+
+
+def generate_study_materials(
+    class_id: str,
+    transcript_data: dict,
+    vision_data: dict | None,
+) -> str:
+    """Genera materiales de estudio en Markdown usando Ollama local."""
+    prompt = load_study_materials_prompt()
+    user_message = build_user_message(class_id, transcript_data, vision_data)
+
+    payload = {
+        "model": OLLAMA_TEXT_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": prompt,
+            },
+            {
+                "role": "user",
+                "content": user_message,
+            },
+        ],
+        "stream": False,
+    }
+
+    ollama_url = f"{OLLAMA_BASE_URL.rstrip('/')}/api/chat"
+
+    try:
+        response = httpx.post(
+            ollama_url,
+            json=payload,
+            timeout=float(OLLAMA_TIMEOUT_SECONDS),
+        )
+    except httpx.ConnectError as exc:
+        raise StudyOllamaConnectionError(
+            f"Ollama no responde en {OLLAMA_BASE_URL}. Comprueba que este arrancado."
+        ) from exc
+    except httpx.TimeoutException as exc:
+        raise StudyOllamaConnectionError(
+            "Ollama tardo demasiado en generar los materiales de estudio."
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise StudyOllamaConnectionError(f"Error conectando con Ollama: {exc}") from exc
+
+    response_text = response.text
+
+    if is_model_missing_error(response.status_code, response_text):
+        raise StudyOllamaModelNotFoundError(
+            "No se encontro el modelo "
+            f"{OLLAMA_TEXT_MODEL}. Ejecuta: ollama pull deepseek-r1-14b-16k"
+        )
+
+    if response.status_code >= 400:
+        raise StudyMaterialServiceError(
+            f"Ollama devolvio HTTP {response.status_code}: {response_text}"
+        )
+
+    try:
+        response_data = response.json()
+    except json.JSONDecodeError as exc:
+        raise StudyMaterialServiceError(
+            "Ollama no devolvio una respuesta HTTP con JSON valido."
+        ) from exc
+
+    markdown = extract_message_content(response_data)
+
+    if not markdown:
+        raise StudyMaterialServiceError(
+            "Ollama respondio correctamente, pero no devolvio contenido Markdown."
+        )
+
+    return remove_thinking_blocks(markdown)
