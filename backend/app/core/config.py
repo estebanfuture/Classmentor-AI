@@ -20,3 +20,7 @@ OPENAI_TRANSCRIPTION_MODEL = os.getenv(
 )
 TRANSCRIPTION_PROVIDER = os.getenv("TRANSCRIPTION_PROVIDER", "openai")
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
+VISION_PROVIDER = os.getenv("VISION_PROVIDER", "ollama")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "llama3.2-vision")
+MAX_FRAMES_TO_ANALYZE = int(os.getenv("MAX_FRAMES_TO_ANALYZE", "30"))

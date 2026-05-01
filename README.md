@@ -93,6 +93,41 @@ WHISPER_MODEL=base
 
 Puedes cambiar `WHISPER_MODEL` por otro modelo compatible con faster-whisper mas adelante, pero `base` es el valor inicial recomendado para desarrollo.
 
+## Configurar Ollama Vision local
+
+El analisis visual de capturas usa Ollama en local con el modelo `llama3.2-vision`.
+
+Instala Ollama desde:
+
+```text
+https://ollama.com/download
+```
+
+Despues, descarga el modelo de vision:
+
+```powershell
+ollama pull llama3.2-vision
+```
+
+Comprueba que Ollama responde:
+
+```powershell
+curl http://localhost:11434/api/tags
+```
+
+Si Ollama esta funcionando, veras una respuesta JSON con los modelos instalados.
+
+En `backend/.env`, configura:
+
+```text
+VISION_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_VISION_MODEL=llama3.2-vision
+MAX_FRAMES_TO_ANALYZE=30
+```
+
+En esta fase ClassMentor AI solo usa Ollama para vision. OpenAI Vision todavia no esta implementado.
+
 ## Probar el endpoint de salud
 
 Abre en el navegador:
@@ -296,6 +331,83 @@ GET /classes/{class_id}
 ```
 
 veras `status` como `frames_extracted`.
+
+## Probar el analisis visual de capturas
+
+Primero sube un MP4:
+
+```text
+POST /classes/upload
+```
+
+Despues extrae capturas:
+
+```text
+POST /classes/{class_id}/extract-frames
+```
+
+Asegurate de que Ollama esta corriendo y de que el modelo existe:
+
+```powershell
+ollama pull llama3.2-vision
+curl http://localhost:11434/api/tags
+```
+
+Luego abre Swagger:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Busca y ejecuta:
+
+```text
+POST /classes/{class_id}/analyze-frames
+```
+
+El backend analizara como maximo `MAX_FRAMES_TO_ANALYZE` capturas desde:
+
+```text
+backend/frames/{class_id}/frame_*.jpg
+```
+
+Si todo va bien, se generara:
+
+```text
+backend/outputs/{class_id}_vision.json
+```
+
+La respuesta sera parecida a esta:
+
+```json
+{
+  "class_id": "0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a",
+  "frames_analyzed": 3,
+  "vision_path": "backend/outputs/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a_vision.json",
+  "status": "vision_analyzed",
+  "message": "Frames analyzed successfully"
+}
+```
+
+Si Ollama no esta arrancado, el endpoint devolvera un error claro. Si falta el modelo, el error indicara que debes ejecutar:
+
+```powershell
+ollama pull llama3.2-vision
+```
+
+Si el modelo no devuelve JSON valido, el backend intentara guardar la respuesta cruda en:
+
+```text
+backend/outputs/{class_id}_vision_raw_response.txt
+```
+
+Si vuelves a ejecutar:
+
+```text
+GET /classes/{class_id}
+```
+
+veras `status` como `vision_analyzed`.
 
 ## Probar la transcripcion de audio
 

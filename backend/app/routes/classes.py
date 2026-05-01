@@ -9,9 +9,17 @@ from sqlalchemy.orm import Session
 
 from app.database.db import get_db
 from app.database.models import ClassRecording
+from app.core.config import MAX_FRAMES_TO_ANALYZE, VISION_PROVIDER
 from app.services.audio_service import extract_audio
 from app.services.transcription_service import transcribe_audio
 from app.services.video_service import extract_frames
+from app.services.vision_service import (
+    InvalidVisionJSONError,
+    OllamaConnectionError,
+    OllamaModelNotFoundError,
+    VisionServiceError,
+    analyze_frames,
+)
 
 
 router = APIRouter(prefix="/classes", tags=["classes"])
@@ -287,4 +295,110 @@ def transcribe_class_audio(
         "text_preview": transcription["text"][:500],
         "status": class_recording.status,
         "message": "Audio transcribed successfully",
+    }
+
+
+@router.post("/{class_id}/analyze-frames")
+def analyze_class_frames(
+    class_id: str,
+    db: Session = Depends(get_db),
+) -> dict[str, str | int]:
+    """Analiza capturas de una clase usando Ollama Vision local."""
+    class_recording = db.get(ClassRecording, class_id)
+
+    if class_recording is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No existe una clase con ese class_id.",
+        )
+
+    if VISION_PROVIDER.lower().strip() != "ollama":
+        raise HTTPException(
+            status_code=500,
+            detail="VISION_PROVIDER debe ser 'ollama' en esta fase.",
+        )
+
+    resolved_frames_dir = BACKEND_DIR.parent / FRAMES_DIR_RESPONSE / class_id
+    frame_files = sorted(resolved_frames_dir.glob("frame_*.jpg"))
+
+    if not frame_files:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay capturas para esta clase. Primero ejecuta extract-frames.",
+        )
+
+    frame_paths = [
+        (FRAMES_DIR_RESPONSE / class_id / frame_file.name).as_posix()
+        for frame_file in frame_files
+    ]
+
+    try:
+        vision_results = analyze_frames(
+            frame_paths=frame_paths,
+            max_frames=MAX_FRAMES_TO_ANALYZE,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except OllamaModelNotFoundError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except OllamaConnectionError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except InvalidVisionJSONError as exc:
+        raw_response_filename = f"{class_id}_vision_raw_response.txt"
+        raw_response_path = OUTPUTS_DIR_RESPONSE / raw_response_filename
+        resolved_raw_response_path = BACKEND_DIR.parent / raw_response_path
+
+        try:
+            resolved_raw_response_path.parent.mkdir(parents=True, exist_ok=True)
+            resolved_raw_response_path.write_text(exc.raw_response, encoding="utf-8")
+            detail = (
+                f"{exc} Respuesta cruda guardada en "
+                f"{raw_response_path.as_posix()}."
+            )
+        except OSError:
+            detail = f"{exc} Ademas, no se pudo guardar la respuesta cruda."
+
+        raise HTTPException(status_code=500, detail=detail) from exc
+    except VisionServiceError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    vision_filename = f"{class_id}_vision.json"
+    vision_path = OUTPUTS_DIR_RESPONSE / vision_filename
+    resolved_vision_path = BACKEND_DIR.parent / vision_path
+
+    vision_data = {
+        "class_id": class_id,
+        "frames_analyzed": len(vision_results),
+        "max_frames_to_analyze": MAX_FRAMES_TO_ANALYZE,
+        "results": vision_results,
+    }
+
+    try:
+        resolved_vision_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with resolved_vision_path.open("w", encoding="utf-8") as output_file:
+            json.dump(vision_data, output_file, ensure_ascii=False, indent=2)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo guardar el archivo JSON de analisis visual.",
+        ) from exc
+
+    class_recording.status = "vision_analyzed"
+
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo actualizar el registro de la clase en la base de datos.",
+        ) from exc
+
+    return {
+        "class_id": class_recording.id,
+        "frames_analyzed": len(vision_results),
+        "vision_path": vision_path.as_posix(),
+        "status": class_recording.status,
+        "message": "Frames analyzed successfully",
     }

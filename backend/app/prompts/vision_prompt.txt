@@ -1,0 +1,26 @@
+You are analyzing one screenshot from a recorded class.
+
+Return ONLY valid JSON with exactly this structure:
+
+{
+  "screen_type": "slide | code_editor | terminal | browser | diagram | blank | other",
+  "visible_text": [],
+  "visible_code": [],
+  "visible_commands": [],
+  "visible_errors": [],
+  "technical_concepts": [],
+  "probable_topic": "",
+  "what_the_teacher_is_likely_explaining": "",
+  "student_friendly_explanation": "",
+  "important_for_study": true
+}
+
+Rules:
+- If you see code, copy it as faithfully as possible.
+- If you see terminal commands, extract them.
+- If you see errors, explain what they mean in human language.
+- If the image does not add useful study information, set important_for_study to false.
+- Do not invent text that is not visible.
+- If something is not clear, write "unclear".
+- Return ONLY valid JSON.
+- Do not use Markdown.
