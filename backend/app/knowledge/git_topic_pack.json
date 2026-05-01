@@ -1,43 +1,54 @@
 {
   "topic": "git",
-  "keywords": [
+  "aliases": [
     "git",
-    "commit",
-    "commits",
-    "repositorio",
-    "versiones",
     "control de versiones",
-    "git add",
-    "git init",
-    "git status",
-    "git diff",
-    "git log"
+    "versionamiento",
+    "repositorio",
+    "commit"
   ],
-  "glossary": {
-    "Git": "herramienta de control de versiones.",
-    "Repositorio": "proyecto/carpeta donde Git guarda historial.",
-    "Commit": "foto del proyecto en un momento concreto.",
-    "git init": "inicia un repositorio Git.",
-    "git status": "muestra el estado actual del proyecto.",
-    "git add": "prepara cambios para el próximo commit.",
-    "git commit": "guarda cambios en el historial.",
-    "git diff": "muestra diferencias entre cambios actuales y última versión guardada.",
-    "git log": "muestra historial de commits."
+  "canonical_concepts": {
+    "git": "Herramienta de control de versiones que permite guardar y revisar cambios de un proyecto.",
+    "control de versiones": "Sistema para registrar diferentes estados de un proyecto y poder recuperar versiones anteriores.",
+    "repositorio": "Proyecto o carpeta donde Git guarda el historial de cambios.",
+    "commit": "Guardado del estado del proyecto en un momento concreto, como una foto del proyecto.",
+    "git init": "Inicia un repositorio Git en una carpeta.",
+    "git status": "Muestra el estado actual del proyecto y que archivos han cambiado.",
+    "git add": "Prepara cambios para incluirlos en el proximo commit.",
+    "git commit": "Guarda los cambios preparados en el historial del proyecto.",
+    "git diff": "Muestra las diferencias entre los cambios actuales y la ultima version guardada.",
+    "git log": "Muestra el historial de commits."
   },
-  "transcription_errors": {
+  "common_transcription_errors": {
+    "git a punto": "git add .",
+    "git add punto": "git add .",
+    "git como yo me": "git commit -m",
+    "git commit guion m": "git commit -m",
     "covid": "commit",
-    "comic": "commit",
     "cómic": "commit",
-    "cómico": "commit",
+    "comic": "commit",
     "cónic": "commit",
+    "conic": "commit",
     "cónico": "commit",
     "comit": "commit",
     "comits": "commits",
     "comité": "commit",
-    "comités": "commits",
-    "git a punto": "git add .",
-    "git add punto": "git add .",
-    "git como yo me": "git commit -m",
-    "git commit guion m": "git commit -m"
-  }
+    "comités": "commits"
+  },
+  "safe_reinforcement": {
+    "git init": "Sirve para iniciar un repositorio Git.",
+    "git status": "Sirve para ver el estado actual del proyecto.",
+    "git add .": "Sirve para preparar todos los cambios para el proximo commit.",
+    "git commit -m": "Sirve para guardar cambios con un mensaje.",
+    "git diff": "Sirve para ver diferencias entre los cambios actuales y la ultima version guardada.",
+    "git log": "Sirve para ver el historial de commits."
+  },
+  "forbidden_misconceptions": [
+    "`git` sirve para iniciar un repositorio",
+    "`git init` sirve para ver cambios",
+    "`git init` sirve para ver el estado",
+    "git diff prepara archivos",
+    "git add guarda cambios",
+    "commit es lo mismo que subir a GitHub"
+  ]
 }

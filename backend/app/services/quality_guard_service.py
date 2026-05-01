@@ -2,7 +2,7 @@ import re
 
 
 def split_markdown_code_blocks(markdown: str) -> list[tuple[str, str]]:
-    """Separa texto normal y bloques de codigo para no tocar comandos."""
+    """Separa texto normal y bloques de codigo para no romper ejemplos."""
     parts = []
     current_lines = []
     current_kind = "text"
@@ -41,6 +41,10 @@ def clean_git_text(text: str) -> str:
             "`git status`: sirve para ver el estado actual del proyecto.",
         ),
         (
+            r"`?git init`?\s+sirve para ver cambios",
+            "`git status` sirve para ver el estado actual del proyecto.",
+        ),
+        (
             r"`?git init`?:\s*sirve para ver cambios",
             "`git status`: sirve para ver el estado actual del proyecto.",
         ),
@@ -49,33 +53,22 @@ def clean_git_text(text: str) -> str:
             "`git status`: sirve para ver el estado actual del proyecto.",
         ),
         (
-            r"`?git init`?\s+sirve para ver cambios",
-            "`git status` sirve para ver el estado actual del proyecto.",
-        ),
-        (r"\bcommands básicos\b", "comandos básicos"),
-        (
-            r"\bcomando\s+`?git`?(?=[^.\n]*iniciar)",
-            "comando `git init`",
-        ),
-        (
-            r"\bgit add para agregar archivos al repositorio\b",
-            "git add prepara archivos para incluirlos en el próximo commit.",
+            r"\bgit diff prepara archivos\b",
+            "git diff muestra las diferencias entre los cambios actuales y la ultima version guardada.",
         ),
         (
             r"\bgit add agrega archivos al repositorio\b",
-            "git add prepara archivos para incluirlos en el próximo commit.",
+            "git add prepara archivos para incluirlos en el proximo commit.",
         ),
         (
             r"\bprepara archivos para ser comittados\b",
-            "prepara archivos para incluirlos en el próximo commit.",
+            "prepara archivos para incluirlos en el proximo commit.",
         ),
+        (r"\bcommands basicos\b", "comandos basicos"),
+        (r"\bcommands básicos\b", "comandos básicos"),
         (r"\bmensaje de comité\b", "mensaje de commit"),
-        (r"\bhistoria de comites\b", "historial de commits"),
         (r"\bhacer un comité\b", "hacer un commit"),
         (r"\bcrear un comité\b", "crear un commit"),
-        (r"\bmomento con grito\b", "momento concreto"),
-        (r"\bestación de trabajo\b", "área de preparación"),
-        (r"\bcomittados\b", "incluidos en el próximo commit"),
         (r"\bcomités\b", "commits"),
         (r"\bcomité\b", "commit"),
         (r"\bcomits\b", "commits"),
@@ -89,7 +82,7 @@ def clean_git_text(text: str) -> str:
 
     return re.sub(
         r"git diff[^.\n]*(prepara|preparar|preparan|preparando)[^.\n]*(archivos|cambios)[^.\n]*(\.|\n|$)",
-        "git diff muestra las diferencias entre los cambios actuales y la última versión guardada.\n",
+        "git diff muestra las diferencias entre los cambios actuales y la ultima version guardada.\n",
         cleaned_text,
         flags=re.IGNORECASE,
     )
@@ -97,12 +90,13 @@ def clean_git_text(text: str) -> str:
 
 def remove_internal_sections(markdown: str) -> str:
     """Quita secciones internas que no deben mostrarse al alumno."""
-    internal_headings = (
+    internal_markers = (
         "vision data",
+        "reglas pedagogicas",
+        "reglas pedagógicas",
         "instrucciones internas",
         "instrucciones para el modelo",
         "prompt interno",
-        "reglas pedagog",
     )
     cleaned_lines = []
     skipping_internal_section = False
@@ -112,10 +106,7 @@ def remove_internal_sections(markdown: str) -> str:
         normalized_heading = stripped_line.lstrip("#").strip().lower().rstrip(":")
         is_heading = stripped_line.startswith("#")
 
-        if any(
-            normalized_heading.startswith(heading)
-            for heading in internal_headings
-        ):
+        if any(marker in normalized_heading for marker in internal_markers):
             skipping_internal_section = is_heading
             continue
 
@@ -125,7 +116,7 @@ def remove_internal_sections(markdown: str) -> str:
         if skipping_internal_section:
             continue
 
-        if any(heading in stripped_line.lower() for heading in internal_headings):
+        if any(marker in stripped_line.lower() for marker in internal_markers):
             continue
 
         cleaned_lines.append(line)
@@ -194,7 +185,11 @@ def remove_unsupported_git_lines(markdown: str) -> str:
     return "".join(cleaned_parts).strip()
 
 
-def apply_quality_guard(markdown: str, topic: str | None = None) -> str:
+def apply_quality_guard(
+    markdown: str,
+    topic: str | None = None,
+    topic_pack: dict | None = None,
+) -> str:
     """Aplica controles de calidad pedagogica al Markdown final."""
     cleaned_markdown = remove_internal_sections(markdown)
     cleaned_markdown = remove_incomplete_transcription_notes(cleaned_markdown)
