@@ -1,0 +1,43 @@
+{
+  "topic": "git",
+  "keywords": [
+    "git",
+    "commit",
+    "commits",
+    "repositorio",
+    "versiones",
+    "control de versiones",
+    "git add",
+    "git init",
+    "git status",
+    "git diff",
+    "git log"
+  ],
+  "glossary": {
+    "Git": "herramienta de control de versiones.",
+    "Repositorio": "proyecto/carpeta donde Git guarda historial.",
+    "Commit": "foto del proyecto en un momento concreto.",
+    "git init": "inicia un repositorio Git.",
+    "git status": "muestra el estado actual del proyecto.",
+    "git add": "prepara cambios para el próximo commit.",
+    "git commit": "guarda cambios en el historial.",
+    "git diff": "muestra diferencias entre cambios actuales y última versión guardada.",
+    "git log": "muestra historial de commits."
+  },
+  "transcription_errors": {
+    "covid": "commit",
+    "comic": "commit",
+    "cómic": "commit",
+    "cómico": "commit",
+    "cónic": "commit",
+    "cónico": "commit",
+    "comit": "commit",
+    "comits": "commits",
+    "comité": "commit",
+    "comités": "commits",
+    "git a punto": "git add .",
+    "git add punto": "git add .",
+    "git como yo me": "git commit -m",
+    "git commit guion m": "git commit -m"
+  }
+}

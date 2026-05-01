@@ -9,6 +9,12 @@ from app.core.config import (
     OLLAMA_TEXT_MODEL,
     OLLAMA_TIMEOUT_SECONDS,
 )
+from app.services.quality_guard_service import apply_quality_guard
+from app.services.topic_detector_service import detect_topic
+from app.services.transcript_normalizer_service import (
+    load_git_topic_pack,
+    normalize_transcript_terms as normalize_terms_for_topic,
+)
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -41,6 +47,28 @@ def load_study_materials_prompt() -> str:
         ) from exc
 
     return f"{pedagogy_profile}\n\n---\n\n{study_prompt}"
+
+
+def build_topic_prompt_context(topic_info: dict) -> str:
+    """Construye contexto de tema y glosario para el prompt."""
+    topic = topic_info.get("topic", "unknown")
+    confidence = topic_info.get("confidence", "low")
+    lines = [
+        "Contexto detectado por ClassMentor Teaching Algorithm v0.1:",
+        f"- Tema detectado: {topic}",
+        f"- Confianza: {confidence}",
+    ]
+
+    if topic == "git":
+        topic_pack = load_git_topic_pack()
+        glossary = topic_pack.get("glossary", {})
+        lines.append("")
+        lines.append("Glosario correcto de Git que debes respetar:")
+
+        for term, explanation in glossary.items():
+            lines.append(f"- {term}: {explanation}")
+
+    return "\n".join(lines)
 
 
 def extract_message_content(response_data: dict) -> str:
@@ -414,26 +442,16 @@ def apply_git_quality_guard(markdown: str) -> str:
 
 def clean_study_markdown(markdown: str, topic: str | None = None) -> str:
     """Aplica correcciones pedagogicas simples sin romper bloques de codigo."""
-    detected_topic = topic or ("git" if is_git_topic(markdown) else None)
-    markdown = remove_internal_pedagogy_section(markdown)
-    markdown = remove_internal_model_sections(markdown)
-    markdown = remove_incomplete_transcription_notes(markdown)
-    markdown = apply_git_quality_guard(markdown)
+    markdown = clean_unexpected_foreign_characters(markdown)
 
-    if detected_topic == "git":
-        markdown = remove_unsupported_git_lines(markdown)
-
-    return markdown.strip()
+    return apply_quality_guard(markdown, topic=topic)
 
 
-def normalize_transcript_data(transcript_data: dict) -> dict:
+def normalize_transcript_data(transcript_data: dict, topic: str | None = None) -> dict:
     """Devuelve una copia de transcript_data con el texto normalizado."""
-    serialized_data = json.dumps(transcript_data, ensure_ascii=False)
-    git_topic = is_git_topic(serialized_data)
-
     def normalize_value(value):
         if isinstance(value, str):
-            return normalize_transcript_terms_for_topic(value, git_topic=git_topic)
+            return normalize_terms_for_topic(value, topic=topic)
 
         if isinstance(value, list):
             return [normalize_value(item) for item in value]
@@ -451,10 +469,21 @@ def normalize_transcript_data(transcript_data: dict) -> dict:
     return normalized_data
 
 
+def extract_transcript_text(transcript_data: dict) -> str:
+    """Extrae texto suficiente para detectar el tema de la clase."""
+    direct_text = transcript_data.get("text")
+
+    if isinstance(direct_text, str) and direct_text.strip():
+        return direct_text
+
+    # Si no existe "text", usamos el JSON completo para cubrir segmentos.
+    return json.dumps(transcript_data, ensure_ascii=False)
+
+
 def build_user_message(
     class_id: str,
     transcript_data: dict,
-    vision_data: dict | None,
+    vision_data: dict | list | None,
 ) -> str:
     """Construye el mensaje con los datos de la clase para Ollama."""
     data = {
@@ -474,15 +503,22 @@ def build_user_message(
 def generate_study_materials(
     class_id: str,
     transcript_data: dict,
-    vision_data: dict | None,
+    vision_data: dict | list | None,
 ) -> str:
     """Genera materiales de estudio en Markdown usando Ollama local."""
-    prompt = load_study_materials_prompt()
-    normalized_transcript_data = normalize_transcript_data(transcript_data)
-    detected_topic = (
-        "git"
-        if is_git_topic(json.dumps(normalized_transcript_data, ensure_ascii=False))
-        else None
+    transcript_text = extract_transcript_text(transcript_data)
+    topic_info = detect_topic(
+        transcript_text=transcript_text,
+        vision_data=vision_data,
+    )
+    topic = topic_info.get("topic")
+    prompt = (
+        f"{load_study_materials_prompt()}\n\n---\n\n"
+        f"{build_topic_prompt_context(topic_info)}"
+    )
+    normalized_transcript_data = normalize_transcript_data(
+        transcript_data,
+        topic=topic,
     )
     user_message = build_user_message(
         class_id,
@@ -553,6 +589,5 @@ def generate_study_materials(
 
     cleaned_markdown = remove_thinking_blocks(markdown)
     cleaned_markdown = remove_outer_markdown_fence(cleaned_markdown)
-    cleaned_markdown = clean_unexpected_foreign_characters(cleaned_markdown)
 
-    return clean_study_markdown(cleaned_markdown, topic=detected_topic)
+    return clean_study_markdown(cleaned_markdown, topic=topic)
