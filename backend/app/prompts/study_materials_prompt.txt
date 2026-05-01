@@ -17,6 +17,9 @@ No uses "snapshot"; usa "foto del proyecto", "captura del estado" o "guardado de
 No uses "staged changes"; usa "cambios preparados".
 Si usas un termino tecnico, explicalo antes o justo despues de usarlo.
 Cuando uses listas Markdown, usa siempre "- " con un espacio despues del guion.
+Usa siempre "commit" o "commits"; no escribas "comit", "comits", "comité" ni "comités".
+Explica "staging area" como "área de preparación".
+Explica que git diff muestra diferencias; no digas que git diff prepara archivos.
 
 Mantén esta estructura exacta:
 
@@ -73,6 +76,7 @@ Reglas sobre posibles errores de transcripcion:
 - En "Posibles errores de transcripcion", explica correcciones probables con contexto, por ejemplo: "clasimento" -> probablemente "ClassMentor AI".
 - En "Posibles errores de transcripcion", explica que "cónic", "cónico", "cómic", "cómico", "comit", "cómit" o "comic" pueden ser probablemente "commit" si el tema es Git.
 - Explica la correccion como posibilidad, no como certeza absoluta.
+- Si aparece una frase parecida a "git diff prepara archivos", corrigela: git diff muestra las diferencias entre los cambios actuales y la ultima version guardada.
 
 Reglas pedagogicas:
 - Explica claro y paso a paso.

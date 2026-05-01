@@ -130,6 +130,71 @@ def clean_unexpected_foreign_characters(markdown: str) -> str:
     return "\n".join(lines).strip()
 
 
+def split_markdown_code_blocks(markdown: str) -> list[tuple[str, str]]:
+    """Separa texto normal y bloques de codigo para no tocar comandos."""
+    parts = []
+    current_lines = []
+    current_kind = "text"
+
+    for line in markdown.splitlines(keepends=True):
+        if line.lstrip().startswith("```"):
+            if current_lines:
+                parts.append((current_kind, "".join(current_lines)))
+                current_lines = []
+
+            current_lines.append(line)
+            current_kind = "code" if current_kind == "text" else "text"
+            continue
+
+        current_lines.append(line)
+
+    if current_lines:
+        parts.append((current_kind, "".join(current_lines)))
+
+    return parts
+
+
+def clean_git_language_in_text(text: str) -> str:
+    """Corrige errores frecuentes de Git en texto normal."""
+    replacements = [
+        (r"\bmensaje de comité\b", "mensaje de commit"),
+        (r"\bhistoria de comites\b", "historial de commits"),
+        (r"\bhacer un comité\b", "hacer un commit"),
+        (r"\bcrear un comité\b", "crear un commit"),
+        (r"\bmomento con grito\b", "momento concreto"),
+        (r"\bestación de trabajo\b", "área de preparación"),
+        (r"\bcomités\b", "commits"),
+        (r"\bcomité\b", "commit"),
+        (r"\bcomits\b", "commits"),
+        (r"\bcomit\b", "commit"),
+    ]
+
+    cleaned_text = text
+
+    for source, target in replacements:
+        cleaned_text = re.sub(source, target, cleaned_text, flags=re.IGNORECASE)
+
+    return re.sub(
+        r"git diff[^.\n]*(prepara|preparar|preparan|preparando)[^.\n]*(archivos|cambios)[^.\n]*(\.|\n|$)",
+        "git diff muestra las diferencias entre los cambios actuales y la última versión guardada.\n",
+        cleaned_text,
+        flags=re.IGNORECASE,
+    )
+
+
+def clean_study_markdown(markdown: str) -> str:
+    """Aplica correcciones pedagogicas simples sin romper bloques de codigo."""
+    cleaned_parts = []
+
+    for kind, content in split_markdown_code_blocks(markdown):
+        if kind == "code":
+            cleaned_parts.append(content)
+        else:
+            cleaned_parts.append(clean_git_language_in_text(content))
+
+    return "".join(cleaned_parts).strip()
+
+
 def build_user_message(
     class_id: str,
     transcript_data: dict,
@@ -222,5 +287,6 @@ def generate_study_materials(
 
     cleaned_markdown = remove_thinking_blocks(markdown)
     cleaned_markdown = remove_outer_markdown_fence(cleaned_markdown)
+    cleaned_markdown = clean_unexpected_foreign_characters(cleaned_markdown)
 
-    return clean_unexpected_foreign_characters(cleaned_markdown)
+    return clean_study_markdown(cleaned_markdown)
