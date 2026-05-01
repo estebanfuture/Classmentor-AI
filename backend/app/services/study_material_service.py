@@ -83,6 +83,25 @@ def remove_thinking_blocks(markdown: str) -> str:
     return cleaned_markdown.strip()
 
 
+def remove_outer_markdown_fence(markdown: str) -> str:
+    """Quita solo el bloque ```markdown externo que a veces envuelve todo."""
+    cleaned_markdown = markdown.strip()
+    lines = cleaned_markdown.splitlines()
+
+    if not lines:
+        return cleaned_markdown
+
+    first_line = lines[0].strip().lower()
+
+    if first_line in ("```markdown", "```"):
+        lines = lines[1:]
+
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+
+    return "\n".join(lines).strip()
+
+
 def build_user_message(
     class_id: str,
     transcript_data: dict,
@@ -173,4 +192,6 @@ def generate_study_materials(
             "Ollama respondio correctamente, pero no devolvio contenido Markdown."
         )
 
-    return remove_thinking_blocks(markdown)
+    cleaned_markdown = remove_thinking_blocks(markdown)
+
+    return remove_outer_markdown_fence(cleaned_markdown)
