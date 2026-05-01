@@ -38,6 +38,58 @@ FRAMES_DIR_RESPONSE = Path("backend") / "frames"
 OUTPUTS_DIR_RESPONSE = Path("backend") / "outputs"
 
 
+def resolve_backend_response_path(path_value: str | Path) -> Path:
+    """Convierte rutas tipo backend/outputs/x.json en rutas reales del disco."""
+    path = Path(path_value)
+
+    if path.is_absolute() or path.exists():
+        return path
+
+    if path.parts and path.parts[0] == "backend":
+        return BACKEND_DIR.parent / path
+
+    return BACKEND_DIR / path
+
+
+def update_class_status(
+    db: Session,
+    class_recording: ClassRecording,
+    status: str,
+) -> None:
+    """Actualiza y guarda el estado de una clase."""
+    class_recording.status = status
+
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise RuntimeError(
+            "No se pudo actualizar el estado de la clase en la base de datos."
+        ) from exc
+
+
+def fail_process_all(
+    db: Session,
+    class_recording: ClassRecording,
+    failed_step: str,
+    error_message: str,
+) -> dict[str, str]:
+    """Marca una clase como fallida y devuelve una respuesta clara."""
+    class_recording.status = "failed"
+
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+
+    return {
+        "class_id": class_recording.id,
+        "status": "failed",
+        "failed_step": failed_step,
+        "error_message": error_message,
+    }
+
+
 def class_recording_to_dict(class_recording: ClassRecording) -> dict[str, str | None]:
     """Convierte un registro de SQLAlchemy en una respuesta JSON sencilla."""
     return {
@@ -520,4 +572,193 @@ def generate_class_study_materials(
         "study_material_path": study_material_path.as_posix(),
         "status": class_recording.status,
         "message": message,
+    }
+
+
+@router.post("/{class_id}/process-all")
+def process_all_class(
+    class_id: str,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Ejecuta todo el pipeline local de una clase ya subida."""
+    class_recording = db.get(ClassRecording, class_id)
+
+    if class_recording is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No existe una clase con ese class_id.",
+        )
+
+    resolved_video_path = resolve_backend_response_path(class_recording.video_path)
+
+    if not resolved_video_path.exists():
+        return fail_process_all(
+            db=db,
+            class_recording=class_recording,
+            failed_step="video",
+            error_message=f"No existe el video: {class_recording.video_path}",
+        )
+
+    steps = {
+        "audio": "pending",
+        "frames": "pending",
+        "transcription": "pending",
+        "vision": "pending",
+        "study_materials": "pending",
+    }
+    outputs = {
+        "audio_path": None,
+        "frames_dir": None,
+        "transcript_path": None,
+        "vision_path": None,
+        "study_material_path": None,
+    }
+
+    try:
+        update_class_status(db, class_recording, "processing_audio")
+        audio_path = extract_audio(
+            video_path=class_recording.video_path,
+            output_dir=str(AUDIO_DIR_RESPONSE),
+            class_id=class_id,
+        )
+        class_recording.audio_path = audio_path
+        update_class_status(db, class_recording, "audio_extracted")
+        steps["audio"] = "completed"
+        outputs["audio_path"] = audio_path
+    except (FileNotFoundError, RuntimeError) as exc:
+        return fail_process_all(db, class_recording, "audio", str(exc))
+
+    try:
+        update_class_status(db, class_recording, "extracting_frames")
+        frame_paths = extract_frames(
+            video_path=class_recording.video_path,
+            output_dir=str(FRAMES_DIR_RESPONSE),
+            class_id=class_id,
+        )
+        update_class_status(db, class_recording, "frames_extracted")
+        steps["frames"] = "completed"
+        outputs["frames_dir"] = (FRAMES_DIR_RESPONSE / class_id).as_posix()
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        return fail_process_all(db, class_recording, "frames", str(exc))
+
+    try:
+        update_class_status(db, class_recording, "transcribing")
+        transcription = transcribe_audio(audio_path)
+
+        transcript_path = OUTPUTS_DIR_RESPONSE / f"{class_id}_transcript.json"
+        resolved_transcript_path = resolve_backend_response_path(transcript_path)
+        transcript_data = {
+            "class_id": class_id,
+            "audio_path": audio_path,
+            "text": transcription["text"],
+            "raw_response": transcription["raw_response"],
+        }
+
+        resolved_transcript_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with resolved_transcript_path.open("w", encoding="utf-8") as output_file:
+            json.dump(transcript_data, output_file, ensure_ascii=False, indent=2)
+
+        update_class_status(db, class_recording, "transcribed")
+        steps["transcription"] = "completed"
+        outputs["transcript_path"] = transcript_path.as_posix()
+    except (FileNotFoundError, RuntimeError, OSError) as exc:
+        return fail_process_all(db, class_recording, "transcription", str(exc))
+
+    try:
+        if VISION_PROVIDER.lower().strip() != "ollama":
+            raise RuntimeError("VISION_PROVIDER debe ser 'ollama' en esta fase.")
+
+        update_class_status(db, class_recording, "analyzing_frames")
+        vision_results = analyze_frames(
+            frame_paths=frame_paths,
+            max_frames=MAX_FRAMES_TO_ANALYZE,
+        )
+
+        vision_path = OUTPUTS_DIR_RESPONSE / f"{class_id}_vision.json"
+        resolved_vision_path = resolve_backend_response_path(vision_path)
+        vision_data = {
+            "class_id": class_id,
+            "frames_analyzed": len(vision_results),
+            "max_frames_to_analyze": MAX_FRAMES_TO_ANALYZE,
+            "results": vision_results,
+        }
+
+        resolved_vision_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with resolved_vision_path.open("w", encoding="utf-8") as output_file:
+            json.dump(vision_data, output_file, ensure_ascii=False, indent=2)
+
+        update_class_status(db, class_recording, "vision_analyzed")
+        steps["vision"] = "completed"
+        outputs["vision_path"] = vision_path.as_posix()
+    except InvalidVisionJSONError as exc:
+        raw_response_path = OUTPUTS_DIR_RESPONSE / f"{class_id}_vision_raw_response.txt"
+        resolved_raw_response_path = resolve_backend_response_path(raw_response_path)
+
+        try:
+            resolved_raw_response_path.parent.mkdir(parents=True, exist_ok=True)
+            resolved_raw_response_path.write_text(exc.raw_response, encoding="utf-8")
+            error_message = (
+                f"{exc} Respuesta cruda guardada en "
+                f"{raw_response_path.as_posix()}."
+            )
+        except OSError:
+            error_message = f"{exc} No se pudo guardar la respuesta cruda."
+
+        return fail_process_all(db, class_recording, "vision", error_message)
+    except (
+        FileNotFoundError,
+        OllamaModelNotFoundError,
+        OllamaConnectionError,
+        VisionServiceError,
+        RuntimeError,
+        OSError,
+    ) as exc:
+        return fail_process_all(db, class_recording, "vision", str(exc))
+
+    try:
+        if STUDY_PROVIDER.lower().strip() != "ollama":
+            raise RuntimeError("STUDY_PROVIDER debe ser 'ollama' en esta fase.")
+
+        update_class_status(db, class_recording, "generating_study_materials")
+        markdown = generate_study_materials(
+            class_id=class_id,
+            transcript_data=transcript_data,
+            vision_data=vision_data,
+        )
+
+        study_material_path = (
+            OUTPUTS_DIR_RESPONSE / f"{class_id}_study_material.md"
+        )
+        resolved_study_material_path = resolve_backend_response_path(
+            study_material_path
+        )
+
+        resolved_study_material_path.parent.mkdir(parents=True, exist_ok=True)
+        resolved_study_material_path.write_text(markdown, encoding="utf-8")
+
+        update_class_status(db, class_recording, "study_materials_generated")
+        steps["study_materials"] = "completed"
+        outputs["study_material_path"] = study_material_path.as_posix()
+    except (
+        StudyOllamaModelNotFoundError,
+        StudyOllamaConnectionError,
+        StudyMaterialServiceError,
+        RuntimeError,
+        OSError,
+    ) as exc:
+        return fail_process_all(db, class_recording, "study_materials", str(exc))
+
+    try:
+        update_class_status(db, class_recording, "completed")
+    except RuntimeError as exc:
+        return fail_process_all(db, class_recording, "completed", str(exc))
+
+    return {
+        "class_id": class_recording.id,
+        "status": "completed",
+        "steps": steps,
+        "outputs": outputs,
+        "message": "Class processed successfully",
     }

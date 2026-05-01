@@ -518,6 +518,99 @@ GET /classes/{class_id}
 
 veras `status` como `study_materials_generated`.
 
+## Probar el pipeline completo
+
+`process-all` ejecuta el pipeline completo de una clase ya subida. Es un endpoint sin background jobs para el MVP local, asi que puede tardar varios minutos.
+
+Antes de usarlo, asegurate de tener configurado:
+
+```text
+TRANSCRIPTION_PROVIDER=local_whisper
+VISION_PROVIDER=ollama
+STUDY_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_VISION_MODEL=llama3.2-vision
+OLLAMA_TEXT_MODEL=deepseek-r1-14b-16k:latest
+```
+
+Tambien comprueba que FFmpeg y Ollama funcionan:
+
+```powershell
+ffmpeg -version
+curl http://localhost:11434/api/tags
+```
+
+Primero sube un MP4:
+
+```text
+POST /classes/upload
+```
+
+Copia el `class_id` devuelto. Luego abre Swagger:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Busca y ejecuta:
+
+```text
+POST /classes/{class_id}/process-all
+```
+
+Si todo va bien, se generaran:
+
+```text
+backend/audio/{class_id}.wav
+backend/frames/{class_id}/frame_*.jpg
+backend/outputs/{class_id}_transcript.json
+backend/outputs/{class_id}_vision.json
+backend/outputs/{class_id}_study_material.md
+```
+
+La respuesta sera parecida a esta:
+
+```json
+{
+  "class_id": "0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a",
+  "status": "completed",
+  "steps": {
+    "audio": "completed",
+    "frames": "completed",
+    "transcription": "completed",
+    "vision": "completed",
+    "study_materials": "completed"
+  },
+  "outputs": {
+    "audio_path": "backend/audio/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a.wav",
+    "frames_dir": "backend/frames/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a",
+    "transcript_path": "backend/outputs/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a_transcript.json",
+    "vision_path": "backend/outputs/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a_vision.json",
+    "study_material_path": "backend/outputs/0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a_study_material.md"
+  },
+  "message": "Class processed successfully"
+}
+```
+
+Si falla un paso, el endpoint detiene el proceso, marca la clase como `failed` y devuelve:
+
+```json
+{
+  "class_id": "0d6b5d4a-9ef8-4a5e-8f6d-93a9e3d41b4a",
+  "status": "failed",
+  "failed_step": "vision",
+  "error_message": "Mensaje claro del error"
+}
+```
+
+Si vuelves a ejecutar:
+
+```text
+GET /classes/{class_id}
+```
+
+veras `status` como `completed` si el pipeline termino correctamente.
+
 ## Probar la transcripcion de audio
 
 Primero sube un MP4:
