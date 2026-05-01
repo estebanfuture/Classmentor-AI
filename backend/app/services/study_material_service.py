@@ -15,6 +15,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 STUDY_MATERIALS_PROMPT_PATH = (
     BACKEND_DIR / "app" / "prompts" / "study_materials_prompt.txt"
 )
+PEDAGOGY_PROFILE_PATH = BACKEND_DIR / "app" / "prompts" / "pedagogy_profile.txt"
 
 
 class StudyMaterialServiceError(RuntimeError):
@@ -32,11 +33,14 @@ class StudyOllamaModelNotFoundError(StudyMaterialServiceError):
 def load_study_materials_prompt() -> str:
     """Lee el prompt usado para generar materiales de estudio."""
     try:
-        return STUDY_MATERIALS_PROMPT_PATH.read_text(encoding="utf-8")
+        pedagogy_profile = PEDAGOGY_PROFILE_PATH.read_text(encoding="utf-8")
+        study_prompt = STUDY_MATERIALS_PROMPT_PATH.read_text(encoding="utf-8")
     except OSError as exc:
         raise StudyMaterialServiceError(
-            "No se pudo leer backend/app/prompts/study_materials_prompt.txt."
+            "No se pudieron leer los prompts de materiales de estudio."
         ) from exc
+
+    return f"{pedagogy_profile}\n\n---\n\n{study_prompt}"
 
 
 def extract_message_content(response_data: dict) -> str:
