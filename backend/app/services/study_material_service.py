@@ -24,6 +24,21 @@ STUDY_MATERIALS_PROMPT_PATH = (
 )
 PEDAGOGY_PROFILE_PATH = BACKEND_DIR / "app" / "prompts" / "pedagogy_profile.txt"
 
+STUDY_SECTION_DEFINITIONS = [
+    ("human_summary", "## 1. Resumen en lenguaje humano"),
+    ("class_goal", "## 2. Qué intentaba enseñar la clase"),
+    ("seen_in_class", "## 3. Visto en clase"),
+    ("verified_reinforcement", "## 4. Refuerzo verificado"),
+    ("explanation_from_zero", "## 5. Explicación desde cero"),
+    ("visual_examples", "## 6. Ejemplos visuales en texto"),
+    ("code_commands_errors", "## 7. Código, comandos o errores vistos"),
+    ("confusing_parts", "## 8. Partes que podrían quedar confusas"),
+    ("prerequisites", "## 9. Prerrequisitos recomendados"),
+    ("micro_challenges", "## 10. Micro-retos prácticos"),
+    ("review_questions", "## 11. Preguntas de repaso"),
+    ("study_plan", "## 12. Plan de estudio"),
+    ("transcription_errors", "## Posibles errores de transcripción"),
+]
 
 class StudyMaterialServiceError(RuntimeError):
     """Error base para problemas generando materiales de estudio."""
@@ -127,7 +142,7 @@ def remove_outer_markdown_fence(markdown: str) -> str:
 
     first_line = lines[0].strip().lower()
 
-    if first_line in ("```markdown", "```"):
+    if first_line in ("```markdown", "```json", "```"):
         lines = lines[1:]
 
         if lines and lines[-1].strip() == "```":
@@ -173,6 +188,113 @@ def clean_study_markdown(
     markdown = clean_unexpected_foreign_characters(markdown)
 
     return apply_quality_guard(markdown, topic=topic, topic_pack=topic_pack)
+
+
+def parse_study_sections(raw_content: str) -> dict:
+    """Convierte la respuesta de Ollama en secciones estructuradas."""
+    cleaned_content = remove_outer_markdown_fence(remove_thinking_blocks(raw_content))
+
+    try:
+        parsed_content = json.loads(cleaned_content)
+    except json.JSONDecodeError:
+        json_start = cleaned_content.find("{")
+        json_end = cleaned_content.rfind("}")
+
+        if json_start >= 0 and json_end > json_start:
+            try:
+                parsed_content = json.loads(cleaned_content[json_start:json_end + 1])
+            except json.JSONDecodeError:
+                return build_fallback_sections(cleaned_content)
+        else:
+            return build_fallback_sections(cleaned_content)
+
+    if not isinstance(parsed_content, dict):
+        return build_fallback_sections(cleaned_content)
+
+    return parsed_content
+
+
+def build_fallback_sections(raw_content: str) -> dict:
+    """Fallback si el modelo no devuelve JSON valido."""
+    return {
+        "title": "Material de estudio",
+        "human_summary": raw_content.strip() or "No se pudo generar un resumen claro.",
+        "class_goal": "Revisar el contenido detectado en la clase.",
+        "seen_in_class": "Contenido generado a partir de la transcripción disponible.",
+        "verified_reinforcement": "No se pudo leer una respuesta estructurada; se conserva el contenido disponible de forma controlada.",
+        "explanation_from_zero": "",
+        "visual_examples": "",
+        "code_commands_errors": "",
+        "confusing_parts": "",
+        "prerequisites": "",
+        "micro_challenges": "",
+        "review_questions": "",
+        "study_plan": "",
+        "transcription_errors": "",
+    }
+
+
+def strip_unwanted_headings(text: str) -> str:
+    """Evita que el contenido del modelo cree titulos fuera de la plantilla."""
+    cleaned_lines = []
+
+    for line in text.splitlines():
+        stripped_line = line.strip()
+
+        if stripped_line.startswith("#"):
+            stripped_line = stripped_line.lstrip("#").strip()
+
+        cleaned_lines.append(stripped_line if line.strip().startswith("#") else line)
+
+    return "\n".join(cleaned_lines).strip()
+
+
+def format_section_content(value) -> str:
+    """Convierte strings, listas o dicts simples a Markdown interno."""
+    if value is None:
+        return ""
+
+    if isinstance(value, list):
+        lines = []
+
+        for item in value:
+            if isinstance(item, dict):
+                item_text = json.dumps(item, ensure_ascii=False)
+            else:
+                item_text = str(item)
+
+            if item_text.strip():
+                lines.append(f"- {strip_unwanted_headings(item_text)}")
+
+        return "\n".join(lines).strip()
+
+    if isinstance(value, dict):
+        lines = []
+
+        for key, item in value.items():
+            label = str(key).replace("_", " ").strip()
+            item_text = format_section_content(item)
+
+            if item_text:
+                lines.append(f"- {label}: {item_text}")
+
+        return "\n".join(lines).strip()
+
+    return strip_unwanted_headings(str(value))
+
+
+def render_study_material_markdown(sections: dict) -> str:
+    """Renderiza siempre el Markdown final con la estructura fija."""
+    title = str(sections.get("title") or "Título de la clase").strip()
+    title = strip_unwanted_headings(title) or "Título de la clase"
+    markdown_parts = [f"# {title}"]
+
+    for key, heading in STUDY_SECTION_DEFINITIONS:
+        content = format_section_content(sections.get(key, ""))
+        markdown_parts.append(heading)
+        markdown_parts.append(content or "No se detectó información suficiente.")
+
+    return "\n\n".join(markdown_parts).strip()
 
 
 def normalize_transcript_data(
@@ -228,11 +350,17 @@ def build_user_message(
     }
 
     return (
-        "Genera el material de estudio para esta clase usando estos datos JSON.\n"
+        "Genera el contenido del material de estudio para esta clase.\n"
+        "Devuelve solo JSON valido, sin Markdown y sin bloques de codigo.\n"
         "Usa teaching_plan como guia principal.\n"
         "Usa transcript_text como transcripcion normalizada, no como texto crudo.\n"
         "Si vision_data es null o no aporta informacion, usa principalmente "
-        "transcript_text y teaching_plan.\n\n"
+        "transcript_text y teaching_plan.\n"
+        "El JSON debe usar exactamente estas claves: "
+        "title, human_summary, class_goal, seen_in_class, "
+        "verified_reinforcement, explanation_from_zero, visual_examples, "
+        "code_commands_errors, confusing_parts, prerequisites, micro_challenges, "
+        "review_questions, study_plan, transcription_errors.\n\n"
         f"{json.dumps(data, ensure_ascii=False, indent=2)}"
     )
 
@@ -285,6 +413,7 @@ def generate_study_materials(
             },
         ],
         "stream": False,
+        "format": "json",
     }
 
     ollama_url = f"{OLLAMA_BASE_URL.rstrip('/')}/api/chat"
@@ -326,18 +455,18 @@ def generate_study_materials(
             "Ollama no devolvio una respuesta HTTP con JSON valido."
         ) from exc
 
-    markdown = extract_message_content(response_data)
+    generated_content = extract_message_content(response_data)
 
-    if not markdown:
+    if not generated_content:
         raise StudyMaterialServiceError(
-            "Ollama respondio correctamente, pero no devolvio contenido Markdown."
+            "Ollama respondio correctamente, pero no devolvio contenido."
         )
 
-    cleaned_markdown = remove_thinking_blocks(markdown)
-    cleaned_markdown = remove_outer_markdown_fence(cleaned_markdown)
+    sections = parse_study_sections(generated_content)
+    rendered_markdown = render_study_material_markdown(sections)
 
     return clean_study_markdown(
-        cleaned_markdown,
+        rendered_markdown,
         topic=topic,
         topic_pack=topic_pack,
     )
