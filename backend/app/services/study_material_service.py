@@ -102,6 +102,34 @@ def remove_outer_markdown_fence(markdown: str) -> str:
     return "\n".join(lines).strip()
 
 
+def clean_unexpected_foreign_characters(markdown: str) -> str:
+    """Quita caracteres de alfabetos no esperados sin tocar Markdown o comandos."""
+    cleaned_markdown = re.sub(
+        r"[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u0400-\u04FF]+\s*",
+        "",
+        markdown,
+    )
+    cleaned_markdown = re.sub(r"[\u200B-\u200D\uFEFF\uFFFD]", "", cleaned_markdown)
+
+    replacements = {
+        "snapshot": "captura del estado",
+        "staged changes": "cambios preparados",
+        "version control": "control de versiones",
+    }
+
+    for source, target in replacements.items():
+        cleaned_markdown = re.sub(
+            rf"\b{re.escape(source)}\b",
+            target,
+            cleaned_markdown,
+            flags=re.IGNORECASE,
+        )
+
+    lines = [line.rstrip() for line in cleaned_markdown.splitlines()]
+
+    return "\n".join(lines).strip()
+
+
 def build_user_message(
     class_id: str,
     transcript_data: dict,
@@ -193,5 +221,6 @@ def generate_study_materials(
         )
 
     cleaned_markdown = remove_thinking_blocks(markdown)
+    cleaned_markdown = remove_outer_markdown_fence(cleaned_markdown)
 
-    return remove_outer_markdown_fence(cleaned_markdown)
+    return clean_unexpected_foreign_characters(cleaned_markdown)

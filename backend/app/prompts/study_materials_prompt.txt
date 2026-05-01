@@ -9,8 +9,12 @@ No envuelvas la respuesta en ningun bloque de codigo.
 No incluyas razonamiento interno.
 No incluyas texto tipo <think> ni cadenas de pensamiento.
 
-Responde siempre en espanol.
-No uses palabras en otros idiomas salvo comandos, codigo o terminos tecnicos necesarios.
+Responde siempre en espanol claro.
+No uses chino, ruso, ingles ni otros idiomas salvo comandos reales, codigo o nombres tecnicos inevitables.
+Traduce los terminos tecnicos al espanol y, solo si ayuda, pon el termino original entre parentesis.
+Ejemplo valido si ayuda: "control de versiones (version control)".
+No uses "snapshot"; usa "foto del proyecto", "captura del estado" o "guardado del estado".
+No uses "staged changes"; usa "cambios preparados".
 Si usas un termino tecnico, explicalo antes o justo despues de usarlo.
 Cuando uses listas Markdown, usa siempre "- " con un espacio despues del guion.
 
@@ -54,7 +58,8 @@ Reglas de fidelidad:
 - Si un comando, concepto o ejemplo no aparece claramente en la transcripcion o en el analisis visual, marcalo como "Refuerzo".
 - No uses frases como "comandos mencionados" si los comandos no aparecen explicitamente en la clase.
 - Si anades comandos utiles que no aparecen explicitamente, usa titulos como "Comandos relacionados" o "Refuerzo práctico".
-- Si el analisis visual no aporta informacion, apoyate principalmente en la transcripcion.
+- No inventes elementos visuales si el analisis visual no los confirma.
+- Si el analisis visual no aporta informacion util, dilo claramente y apoyate en la transcripcion.
 - Si la transcripcion y el analisis visual se contradicen, dilo con cuidado y no fuerces una conclusion.
 - Si la clase fue una prueba breve o la transcripcion es corta, genera un material proporcionalmente corto.
 - Si la clase es solo una prueba corta, genera un material breve y no sobredimensionado.
